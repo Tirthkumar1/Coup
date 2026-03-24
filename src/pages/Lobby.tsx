@@ -71,7 +71,7 @@ export default function Lobby() {
       // Determine effective user ID (auth id or guest id)
       let effectiveId = user?.id
       if (!effectiveId) {
-        effectiveId = localStorage.getItem('coup_guest_id')
+        effectiveId = localStorage.getItem('coup_guest_id') ?? undefined
         if (!effectiveId) {
           effectiveId = `guest_${Math.random().toString(36).substring(2, 9)}`
           localStorage.setItem('coup_guest_id', effectiveId)
