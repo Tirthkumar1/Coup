@@ -14,7 +14,6 @@ import {
 import CardComponent from '../components/Card'
 import ActionLogComponent, { type ActionLogEntry } from '../components/ActionLog'
 import BotEngine from '../components/BotEngine'
-import type { User } from '@supabase/supabase-js'
 
 /* ── constants ─────────────────────────────── */
 const ACTION_LABELS: Partial<Record<ActionType, string>> = {
@@ -47,18 +46,15 @@ export default function Game() {
   const navigate  = useNavigate()
 
   /* auth */
-  const [user, setUser] = useState<User | null>(null)
   const [myId, setMyId] = useState<string>(() => localStorage.getItem('coup_guest_id') || '')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user ?? null
-      setUser(u)
       if (u) setMyId(u.id)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       const u = session?.user ?? null
-      setUser(u)
       if (u) setMyId(u.id)
       else setMyId(localStorage.getItem('coup_guest_id') || '')
     })
