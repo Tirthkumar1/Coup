@@ -7,6 +7,7 @@ interface CardProps {
   onClick?: () => void
   size?: 'sm' | 'md' | 'lg'
   eliminated?: boolean
+  alwaysShow?: boolean
 }
 
 const CHARACTER_IMAGES: Record<string, string> = {
@@ -38,8 +39,9 @@ export default function Card({
   onClick,
   size = 'md',
   eliminated = false,
+  alwaysShow = false,
 }: CardProps) {
-  const isRevealed = card.revealed && !forceHidden
+  const isRevealed = (card.revealed || alwaysShow) && !forceHidden
 
   return (
     <button

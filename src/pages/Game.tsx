@@ -48,8 +48,21 @@ export default function Game() {
 
   /* auth */
   const [user, setUser] = useState<User | null>(null)
+  const [myId, setMyId] = useState<string>(() => localStorage.getItem('coup_guest_id') || '')
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user ?? null
+      setUser(u)
+      if (u) setMyId(u.id)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      const u = session?.user ?? null
+      setUser(u)
+      if (u) setMyId(u.id)
+      else setMyId(localStorage.getItem('coup_guest_id') || '')
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   /* server state */
@@ -67,7 +80,6 @@ export default function Game() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const myId = user?.id ?? ''
 
   /* ── Fetch + subscribe ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -157,7 +169,7 @@ export default function Game() {
     timerRef.current = setInterval(tick, 250)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.challengeDeadline])
+  }, [gameState?.challengeDeadline, myId])
 
   /* ── Write to Supabase ─────────────────────────────────────────────── */
   const commitAction = useCallback(async (
@@ -376,7 +388,7 @@ export default function Game() {
               </div>
               <div className="flex gap-3">
                 {myPlayer.cards.map((card, i) => (
-                  <CardComponent key={i} card={card} size="md" />
+                  <CardComponent key={i} card={card} size="md" alwaysShow={true} />
                 ))}
               </div>
             </div>
