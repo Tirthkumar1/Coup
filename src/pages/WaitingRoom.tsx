@@ -108,6 +108,27 @@ export default function WaitingRoom() {
     setLoading(false)
   }
 
+  const handleAddBot = async () => {
+    if (!room || !isHost) return
+    setLoading(true); setError('')
+    try {
+      const botNumber = players.filter(p => p.user_id.startsWith('bot_')).length + 1
+      const botId = `bot_${Math.random().toString(36).substring(2, 9)}`
+      
+      const { error: pe } = await supabase
+        .from('players')
+        .insert({
+          room_id: room.id,
+          user_id: botId,
+          display_name: `Bot ${botNumber}`,
+        })
+      if (pe) throw pe
+    } catch (e: unknown) {
+      setError((e as Error).message)
+    }
+    setLoading(false)
+  }
+
   const copyCode = () => {
     navigator.clipboard.writeText(code ?? '')
     setCopied(true)
@@ -157,17 +178,26 @@ export default function WaitingRoom() {
 
         {/* Controls */}
         {isHost ? (
-          <button
-            onClick={handleStartGame}
-            disabled={!canStart || loading}
-            className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white font-bold rounded-xl px-4 py-3 transition-colors"
-          >
-            {loading
-              ? 'Starting…'
-              : canStart
-                ? `Start Game (${players.length} players)`
-                : `Need at least 2 players (${players.length}/2)`}
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={handleAddBot}
+              disabled={players.length >= 6 || loading}
+              className="w-full bg-indigo-900 hover:bg-indigo-800 border border-indigo-700 disabled:opacity-40 text-white font-bold rounded-xl px-4 py-3 transition-colors"
+            >
+              + Add Bot
+            </button>
+            <button
+              onClick={handleStartGame}
+              disabled={!canStart || loading}
+              className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white font-bold rounded-xl px-4 py-3 transition-colors"
+            >
+              {loading
+                ? 'Starting…'
+                : canStart
+                  ? `Start Game (${players.length} players)`
+                  : `Need at least 2 players (${players.length}/2)`}
+            </button>
+          </div>
         ) : (
           <div className="text-center text-gray-500 text-sm py-2">
             Waiting for the host to start the game…

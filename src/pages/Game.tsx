@@ -13,6 +13,7 @@ import {
 } from '../lib/gameLogic'
 import CardComponent from '../components/Card'
 import ActionLogComponent, { type ActionLogEntry } from '../components/ActionLog'
+import BotEngine from '../components/BotEngine'
 import type { User } from '@supabase/supabase-js'
 
 /* ── constants ─────────────────────────────── */
@@ -52,6 +53,7 @@ export default function Game() {
   }, [])
 
   /* server state */
+  const [roomHostId, setRoomHostId] = useState<string | null>(null)
   const [gsRowId,    setGsRowId]    = useState<string | null>(null)
   const [gameState,  setGameState]  = useState<GameState | null>(null)
   const [actionLog,  setActionLog]  = useState<ActionLogEntry[]>([])
@@ -76,6 +78,7 @@ export default function Game() {
     const boot = async () => {
       const { data: room } = await supabase.from('rooms').select().eq('code', code).single()
       if (!room) return
+      setRoomHostId(room.host_id)
 
       const { data: gs } = await supabase
         .from('game_state').select().eq('room_id', room.id).single()
@@ -146,7 +149,7 @@ export default function Game() {
         clearInterval(timerRef.current)
         /* actor auto-passes when window expires */
         if (gameState.currentTurnUserId === myId) {
-          commitAction(gameState, 'pass', myId, undefined, gsRowId)
+          applyActionLocally('pass', myId, undefined)
         }
       }
     }
@@ -188,33 +191,43 @@ export default function Game() {
     setLoading(false)
   }, [])
 
+  const applyActionLocally = useCallback(async (
+    action: ActionType,
+    actorId: string,
+    targetId?: string,
+    character?: Character | string,
+  ) => {
+    if (!gameState) return
+    try {
+      if (action === 'lose_influence') {
+        const next = loseInfluence(gameState, actorId, parseInt(targetId ?? '0', 10))
+        setGameState(next)
+        await commitAction(next, 'lose_influence', actorId, undefined, gsRowId)
+      } else {
+        const next = applyAction(gameState, actorId, action, targetId, character as Character)
+        setGameState(next)
+        if (actorId === myId) {
+          setTargetAction(null); setBlockCharPicker(false)
+        }
+        await commitAction(next, action, actorId, targetId, gsRowId)
+      }
+    } catch (e: unknown) {
+      if (actorId === myId) setError((e as Error).message)
+      setGameState(gameState) // rollback
+    }
+  }, [gameState, myId, gsRowId, commitAction])
+
   const handleAction = useCallback(async (
     action: ActionType,
     targetId?: string,
     character?: Character,
   ) => {
-    if (!gameState) return
-    try {
-      const next = applyAction(gameState, myId, action, targetId, character)
-      setGameState(next)
-      setTargetAction(null); setBlockCharPicker(false)
-      await commitAction(next, action, myId, targetId, gsRowId)
-    } catch (e: unknown) {
-      setError((e as Error).message)
-      setGameState(gameState) // rollback
-    }
-  }, [gameState, myId, gsRowId, commitAction])
+    return applyActionLocally(action, myId, targetId, character)
+  }, [applyActionLocally, myId])
 
   const handleLoseInfluence = useCallback(async (cardIndex: number) => {
-    if (!gameState) return
-    try {
-      const next = loseInfluence(gameState, myId, cardIndex)
-      setGameState(next)
-      await commitAction(next, 'lose_influence', myId, undefined, gsRowId)
-    } catch (e: unknown) {
-      setError((e as Error).message)
-    }
-  }, [gameState, myId, gsRowId, commitAction])
+    return applyActionLocally('lose_influence', myId, cardIndex.toString())
+  }, [applyActionLocally, myId])
 
   /* ── Guards ────────────────────────────────────────────────────────── */
   if (!gameState) {
@@ -251,6 +264,17 @@ export default function Game() {
    * ───────────────────────────────────────────────────────────────────*/
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col select-none">
+      
+      {/* Bot Engine Mount */}
+      {roomHostId === myId && (
+        <BotEngine
+          gameState={gameState}
+          hostId={roomHostId!}
+          myId={myId}
+          commitAction={commitAction}
+          applyActionLocally={applyActionLocally}
+        />
+      )}
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <header className="flex items-center justify-between px-4 py-2 bg-gray-900/80 backdrop-blur border-b border-gray-800 flex-shrink-0">
