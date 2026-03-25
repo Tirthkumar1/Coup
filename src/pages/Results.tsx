@@ -43,6 +43,8 @@ export default function Results() {
     if (!roomId || !gsRowId) return
     setLoading(true); setError('')
     try {
+      // Delete action_log first (FK references game_state), then game_state
+      await supabase.from('action_log').delete().eq('game_state_id', gsRowId)
       await supabase.from('game_state').delete().eq('id', gsRowId)
       await supabase.from('rooms').update({ status: 'waiting' }).eq('id', roomId)
       navigate(`/room/${code}`)

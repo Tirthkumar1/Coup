@@ -72,6 +72,13 @@ export default function WaitingRoom() {
     if (!room || !isHost) return
     setLoading(true); setError('')
     try {
+      // Clean up any stale game_state from a previous game (action_log first due to FK)
+      const { data: existing } = await supabase.from('game_state').select('id').eq('room_id', room.id).single()
+      if (existing) {
+        await supabase.from('action_log').delete().eq('game_state_id', existing.id)
+        await supabase.from('game_state').delete().eq('id', existing.id)
+      }
+
       const playerInfos = players.map(p => ({ userId: p.user_id, displayName: p.display_name }))
       const gs = initGame(playerInfos)
 
