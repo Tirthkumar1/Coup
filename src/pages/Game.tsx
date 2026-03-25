@@ -17,19 +17,19 @@ import BotEngine from '../components/BotEngine'
 
 /* ── constants ─────────────────────────────── */
 const ACTION_LABELS: Partial<Record<ActionType, string>> = {
-  income:      'Income  +1💰',
+  income: 'Income  +1💰',
   foreign_aid: 'Foreign Aid  +2💰',
-  coup:        'Coup  −7💰',
-  tax:         'Tax (Duke)  +3💰',
+  coup: 'Coup  −7💰',
+  tax: 'Tax (Duke)  +3💰',
   assassinate: 'Assassinate  −3💰',
-  steal:       'Steal (Captain)',
-  exchange:    'Exchange (Ambassador)',
+  steal: 'Steal (Captain)',
+  exchange: 'Exchange (Ambassador)',
 }
 
 const BLOCK_OPTIONS: Partial<Record<ActionType, Character[]>> = {
   foreign_aid: ['Duke'],
   assassinate: ['Contessa'],
-  steal:       ['Captain', 'Ambassador'],
+  steal: ['Captain', 'Ambassador'],
 }
 
 const TARGETED: ActionType[] = ['coup', 'assassinate', 'steal']
@@ -43,7 +43,7 @@ function secondsLeft(deadline: string | null): number {
 /* ── component ─────────────────────────────── */
 export default function Game() {
   const { code } = useParams<{ code: string }>()
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
 
   /* auth */
   const [myId, setMyId] = useState<string>(() => localStorage.getItem('coup_guest_id') || '')
@@ -62,20 +62,36 @@ export default function Game() {
   }, [])
 
   /* server state */
+  const [roomId, setRoomId] = useState<string | null>(null)
   const [roomHostId, setRoomHostId] = useState<string | null>(null)
-  const [gsRowId,    setGsRowId]    = useState<string | null>(null)
-  const [gameState,  setGameState]  = useState<GameState | null>(null)
-  const [actionLog,  setActionLog]  = useState<ActionLogEntry[]>([])
-  const [error,      setError]      = useState('')
-  const [loading,    setLoading]    = useState(false)
+  const [gsRowId, setGsRowId] = useState<string | null>(null)
+  const [gameState, setGameState] = useState<GameState | null>(null)
+  const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Keep a ref to gsRowId so callbacks always have the latest value
+  const gsRowIdRef = useRef<string | null>(null)
+  useEffect(() => { gsRowIdRef.current = gsRowId }, [gsRowId])
+
+  // Keep a ref to gameState so callbacks always have the latest value
+  const gameStateRef = useRef<GameState | null>(null)
+  useEffect(() => { gameStateRef.current = gameState }, [gameState])
+
+  // Keep a ref to the name map for action log insertions
+  const nameMapRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    if (gameState) {
+      nameMapRef.current = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
+    }
+  }, [gameState])
 
   /* ui state */
-  const [targetAction,       setTargetAction]       = useState<ActionType | null>(null)
-  const [blockCharPicker,    setBlockCharPicker]    = useState(false)
-  const [countdown,          setCountdown]          = useState(0)
+  const [targetAction, setTargetAction] = useState<ActionType | null>(null)
+  const [blockCharPicker, setBlockCharPicker] = useState(false)
+  const [countdown, setCountdown] = useState(0)
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
 
   /* ── Fetch + subscribe ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -86,27 +102,31 @@ export default function Game() {
     const boot = async () => {
       const { data: room } = await supabase.from('rooms').select().eq('code', code).single()
       if (!room) return
+      setRoomId(room.id)
       setRoomHostId(room.host_id)
 
       const { data: gs } = await supabase
         .from('game_state').select().eq('room_id', room.id).single()
       if (!gs) return
       setGsRowId(gs.id)
+      gsRowIdRef.current = gs.id
 
       const state = gs.payload as GameState
       setGameState(state)
+      gameStateRef.current = state
 
       /* existing action log */
       const nameMap = Object.fromEntries(state.players.map(p => [p.userId, p.displayName]))
+      nameMapRef.current = nameMap
       const { data: logs } = await supabase
         .from('action_log').select().eq('game_state_id', gs.id).order('created_at')
       if (logs) {
         setActionLog(logs.map(l => ({
           id: l.id,
-          actorName:  nameMap[l.actor_id]  ?? 'Unknown',
+          actorName: nameMap[l.actor_id] ?? 'Unknown',
           actionType: l.action_type,
           targetName: l.target_id ? (nameMap[l.target_id] ?? 'Unknown') : undefined,
-          createdAt:  l.created_at,
+          createdAt: l.created_at,
         })))
       }
 
@@ -117,7 +137,9 @@ export default function Game() {
           filter: `room_id=eq.${room.id}`,
         }, ({ new: row }) => {
           const next = (row as { payload: GameState }).payload
+          if (!next || !next.players) return // guard malformed updates
           setGameState(next)
+          gameStateRef.current = next
           if (next.phase === 'game_over') navigate(`/results/${code}`)
         })
         .on('postgres_changes', {
@@ -125,15 +147,16 @@ export default function Game() {
           filter: `game_state_id=eq.${gs.id}`,
         }, ({ new: log }) => {
           const l = log as { id: string; actor_id: string; action_type: string; target_id?: string; created_at: string }
+          // Use the ref so we always have current player names
+          const nm = nameMapRef.current
           setActionLog(prev => {
             if (prev.find(e => e.id === l.id)) return prev
-            const nm = Object.fromEntries((gameState?.players ?? []).map(p => [p.userId, p.displayName]))
             return [...prev, {
-              id:         l.id,
-              actorName:  nm[l.actor_id]   ?? 'Unknown',
+              id: l.id,
+              actorName: nm[l.actor_id] ?? 'Unknown',
               actionType: l.action_type,
               targetName: l.target_id ? (nm[l.target_id] ?? 'Unknown') : undefined,
-              createdAt:  l.created_at,
+              createdAt: l.created_at,
             }]
           })
         })
@@ -142,7 +165,7 @@ export default function Game() {
 
     boot()
     return () => { channel && supabase.removeChannel(channel) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
   /* ── Countdown timer ───────────────────────────────────────────────── */
@@ -151,12 +174,13 @@ export default function Game() {
     if (!gameState?.challengeDeadline) { setCountdown(0); return }
 
     const tick = () => {
-      const s = secondsLeft(gameState.challengeDeadline)
+      const s = secondsLeft(gameStateRef.current?.challengeDeadline ?? null)
       setCountdown(s)
       if (s === 0 && timerRef.current) {
         clearInterval(timerRef.current)
         /* actor auto-passes when window expires */
-        if (gameState.currentTurnUserId === myId) {
+        const gs = gameStateRef.current
+        if (gs && gs.currentTurnUserId === myId) {
           applyActionLocally('pass', myId, undefined)
         }
       }
@@ -164,66 +188,109 @@ export default function Game() {
     tick()
     timerRef.current = setInterval(tick, 250)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.challengeDeadline, myId])
 
+  /* ── CORE FIX: Always fetch fresh state from Supabase before mutating ── */
+  // This is what prevents the desync crash. Never trust local React state
+  // as the base for computing the next state — always re-fetch first.
+  const fetchFreshState = useCallback(async (): Promise<{ state: GameState; rowId: string } | null> => {
+    const rowId = gsRowIdRef.current
+    if (!rowId) return null
+    const { data: gs, error } = await supabase
+      .from('game_state')
+      .select('id, payload')
+      .eq('id', rowId)
+      .single()
+    if (error || !gs || !gs.payload) return null
+    return { state: gs.payload as GameState, rowId: gs.id }
+  }, [])
+
   /* ── Write to Supabase ─────────────────────────────────────────────── */
-  const commitAction = useCallback(async (
-    state: GameState,
+  const commitState = useCallback(async (
+    nextState: GameState,
     action: ActionType,
     actorId: string,
     targetId: string | undefined,
-    rowId: string | null,
+    rowId: string,
   ) => {
-    if (!rowId) return
-    setLoading(true)
-    try {
-      await supabase.from('game_state').update({
-        payload:              state,
-        phase:                state.phase,
-        current_turn_user_id: state.currentTurnUserId,
-        treasury_coins:       state.treasuryCoins,
-        updated_at:           new Date().toISOString(),
-      }).eq('id', rowId)
+    // Single atomic write — both payload AND individual columns updated together
+    const { error: updateErr } = await supabase.from('game_state').update({
+      payload: nextState,
+      phase: nextState.phase,
+      current_turn_user_id: nextState.currentTurnUserId,
+      treasury_coins: nextState.treasuryCoins,
+      winner_id: nextState.winnerId,
+      losing_influence_user_id: nextState.losingInfluenceUserId,
+      updated_at: new Date().toISOString(),
+    }).eq('id', rowId)
 
-      await supabase.from('action_log').insert({
-        game_state_id: rowId,
-        actor_id:      actorId,
-        action_type:   action,
-        target_id:     targetId ?? null,
-        payload:       {},
-      })
-    } catch (e: unknown) {
-      setError((e as Error).message)
-    }
-    setLoading(false)
+    if (updateErr) throw new Error(updateErr.message)
+
+    // Log the action (best-effort — don't block on failure)
+    await supabase.from('action_log').insert({
+      game_state_id: rowId,
+      actor_id: actorId,
+      action_type: action,
+      target_id: targetId ?? null,
+      payload: {},
+    }).then(({ error: logErr }) => {
+      if (logErr) console.warn('action_log insert failed:', logErr.message)
+    })
   }, [])
 
+  /* ── Apply action (THE KEY FIX: fetch fresh state first) ───────────── */
   const applyActionLocally = useCallback(async (
     action: ActionType,
     actorId: string,
     targetId?: string,
     character?: Character | string,
   ) => {
-    if (!gameState) return
+    if (loading) return // prevent double-submits
+    setLoading(true)
+    setError('')
+
     try {
+      // ALWAYS fetch the latest state from DB before computing next state
+      // This prevents Player A's stale state from overwriting Player B's move
+      const fresh = await fetchFreshState()
+      if (!fresh) throw new Error('Could not fetch current game state')
+
+      const { state: currentState, rowId } = fresh
+
+      let nextState: GameState
       if (action === 'lose_influence') {
-        const next = loseInfluence(gameState, actorId, parseInt(targetId ?? '0', 10))
-        setGameState(next)
-        await commitAction(next, 'lose_influence', actorId, undefined, gsRowId)
+        nextState = loseInfluence(currentState, actorId, parseInt(targetId ?? '0', 10))
       } else {
-        const next = applyAction(gameState, actorId, action, targetId, character as Character)
-        setGameState(next)
-        if (actorId === myId) {
-          setTargetAction(null); setBlockCharPicker(false)
-        }
-        await commitAction(next, action, actorId, targetId, gsRowId)
+        nextState = applyAction(currentState, actorId, action, targetId, character as Character)
       }
+
+      // Update local UI immediately (optimistic)
+      setGameState(nextState)
+      gameStateRef.current = nextState
+
+      // Reset UI state
+      if (actorId === myId) {
+        setTargetAction(null)
+        setBlockCharPicker(false)
+      }
+
+      // Commit to Supabase (realtime will sync all other players)
+      await commitState(nextState, action, actorId, targetId, rowId)
+
     } catch (e: unknown) {
-      if (actorId === myId) setError((e as Error).message)
-      setGameState(gameState) // rollback
+      const msg = (e as Error).message
+      if (actorId === myId) setError(msg)
+      // Rollback: restore from DB
+      const fresh = await fetchFreshState()
+      if (fresh) {
+        setGameState(fresh.state)
+        gameStateRef.current = fresh.state
+      }
+    } finally {
+      setLoading(false)
     }
-  }, [gameState, myId, gsRowId, commitAction])
+  }, [loading, myId, fetchFreshState, commitState])
 
   const handleAction = useCallback(async (
     action: ActionType,
@@ -237,6 +304,16 @@ export default function Game() {
     return applyActionLocally('lose_influence', myId, cardIndex.toString())
   }, [applyActionLocally, myId])
 
+  // commitAction wrapper for BotEngine compatibility
+  const commitAction = useCallback(async (
+    _state: GameState, // ignored — bot engine now uses applyActionLocally which fetches fresh
+    action: ActionType,
+    actorId: string,
+    targetId: string | undefined,
+  ) => {
+    await applyActionLocally(action, actorId, targetId)
+  }, [applyActionLocally])
+
   /* ── Guards ────────────────────────────────────────────────────────── */
   if (!gameState) {
     return (
@@ -247,17 +324,17 @@ export default function Game() {
   }
 
   /* ── Derived ───────────────────────────────────────────────────────── */
-  const nameMap    = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
-  const myPlayer   = gameState.players.find(p => p.userId === myId)
-  const opponents  = gameState.players.filter(p => p.userId !== myId)
-  const isMyTurn   = gameState.currentTurnUserId === myId
-  const validActs  = getValidActions(gameState, myId)
-  const pending    = gameState.pendingAction
+  const nameMap = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
+  const myPlayer = gameState.players.find(p => p.userId === myId)
+  const opponents = gameState.players.filter(p => p.userId !== myId)
+  const isMyTurn = gameState.currentTurnUserId === myId
+  const validActs = getValidActions(gameState, myId)
+  const pending = gameState.pendingAction
   const iCanChallenge = canChallenge(gameState, myId)
-  const iCanBlock     = canBlock(gameState, myId)
+  const iCanBlock = canBlock(gameState, myId)
 
   const showReactOverlay = ['challenge_window', 'block_window', 'block_challenge_window'].includes(gameState.phase)
-  const showLoseModal    = gameState.phase === 'lose_influence' && gameState.losingInfluenceUserId === myId
+  const showLoseModal = gameState.phase === 'lose_influence' && gameState.losingInfluenceUserId === myId
 
   const blockOpts = pending ? (BLOCK_OPTIONS[pending.action] ?? []) : []
 
@@ -272,12 +349,12 @@ export default function Game() {
    * ───────────────────────────────────────────────────────────────────*/
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col select-none">
-      
+
       {/* Bot Engine Mount */}
-      {roomHostId === myId && (
+      {roomId && roomHostId === myId && (
         <BotEngine
           gameState={gameState}
-          hostId={roomHostId!}
+          hostId={roomHostId}
           myId={myId}
           commitAction={commitAction}
           applyActionLocally={applyActionLocally}
@@ -325,7 +402,13 @@ export default function Game() {
                   </div>
                   <div className="flex gap-2">
                     {opp.cards.map((card, i) => (
-                      <CardComponent key={i} card={card} forceHidden={!card.revealed} size="sm" eliminated={opp.isEliminated} />
+                      <CardComponent
+                        key={i}
+                        card={card}
+                        forceHidden={!card.revealed}
+                        size="sm"
+                        eliminated={opp.isEliminated}
+                      />
                     ))}
                   </div>
                 </div>
@@ -342,7 +425,11 @@ export default function Game() {
               </div>
             )}
 
-            {isMyTurn && gameState.phase === 'player_turn' ? (
+            {loading && (
+              <div className="text-gray-500 text-sm animate-pulse">Processing…</div>
+            )}
+
+            {isMyTurn && gameState.phase === 'player_turn' && !loading ? (
               <>
                 <div className="text-amber-400 font-bold text-xl">Your Turn</div>
                 <div className="flex flex-wrap gap-2 justify-center max-w-lg">
@@ -418,7 +505,7 @@ export default function Game() {
                 .map(p => (
                   <button
                     key={p.userId}
-                    onClick={() => handleAction(targetAction, p.userId)}
+                    onClick={() => { setTargetAction(null); handleAction(targetAction, p.userId) }}
                     className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-600 text-white px-4 py-3 rounded-xl transition-all"
                   >
                     <div className="w-8 h-8 rounded-full bg-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
@@ -442,7 +529,7 @@ export default function Game() {
       {/* ═══════════════════════════════════════════════════════════════
        *  CHALLENGE / BLOCK OVERLAY
        * ═══════════════════════════════════════════════════════════════*/}
-      {showReactOverlay && (
+      {showReactOverlay && !loading && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-amber-900/60 shadow-2xl">
 
@@ -543,6 +630,7 @@ export default function Game() {
                       card={card}
                       size="lg"
                       selectable
+                      alwaysShow={true}
                       onClick={() => handleLoseInfluence(i)}
                     />
                     <span className="text-xs text-gray-500">{card.character}</span>

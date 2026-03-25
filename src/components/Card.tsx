@@ -10,20 +10,21 @@ interface CardProps {
   alwaysShow?: boolean
 }
 
+// FIX: folder is "charactors" (typo in your project), not "characters"
 const CHARACTER_IMAGES: Record<string, string> = {
-  Duke: '/assets/characters/duke.png',
-  Assassin: '/assets/characters/assassin.png',
-  Captain: '/assets/characters/captain.png',
-  Ambassador: '/assets/characters/ambassador.png',
-  Contessa: '/assets/characters/contessa.png',
+  Duke: '/assets/charactors/duke.png',
+  Assassin: '/assets/charactors/assassin.png',
+  Captain: '/assets/charactors/captain.png',
+  Ambassador: '/assets/charactors/ambassador.png',
+  Contessa: '/assets/charactors/contessa.png',
 }
 
 const CHARACTER_GRADIENTS: Record<string, string> = {
-  Duke:        'from-yellow-700 to-yellow-950',
-  Assassin:    'from-slate-600  to-slate-950',
-  Captain:     'from-blue-700   to-blue-950',
-  Ambassador:  'from-emerald-700 to-emerald-950',
-  Contessa:    'from-rose-700   to-rose-950',
+  Duke: 'from-yellow-700 to-yellow-950',
+  Assassin: 'from-slate-600  to-slate-950',
+  Captain: 'from-blue-700   to-blue-950',
+  Ambassador: 'from-emerald-700 to-emerald-950',
+  Contessa: 'from-rose-700   to-rose-950',
 }
 
 const SIZE_CLASSES: Record<string, string> = {
@@ -79,7 +80,7 @@ export default function Card({
       ) : (
         <div className="w-full h-full bg-gradient-to-b from-indigo-800 to-indigo-950 flex items-center justify-center relative">
           <img
-            src="/assets/characters/card-back.png"
+            src="/assets/charactors/card-back.png"
             alt="Card back"
             className="absolute inset-0 w-full h-full object-cover"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}

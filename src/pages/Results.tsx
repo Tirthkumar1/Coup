@@ -4,23 +4,24 @@ import { supabase } from '../lib/supabase'
 import type { GameState } from '../lib/gameLogic'
 import CardComponent from '../components/Card'
 
+// FIX: folder is "charactors" (typo in your project), not "characters"
 const CHARACTER_IMAGES: Record<string, string> = {
-  Duke:        '/assets/characters/duke.png',
-  Assassin:    '/assets/characters/assassin.png',
-  Captain:     '/assets/characters/captain.png',
-  Ambassador:  '/assets/characters/ambassador.png',
-  Contessa:    '/assets/characters/contessa.png',
+  Duke: '/assets/charactors/duke.png',
+  Assassin: '/assets/charactors/assassin.png',
+  Captain: '/assets/charactors/captain.png',
+  Ambassador: '/assets/charactors/ambassador.png',
+  Contessa: '/assets/charactors/contessa.png',
 }
 
 export default function Results() {
   const { code } = useParams<{ code: string }>()
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
 
-  const [gameState,  setGameState]  = useState<GameState | null>(null)
-  const [roomId,     setRoomId]     = useState<string | null>(null)
-  const [gsRowId,    setGsRowId]    = useState<string | null>(null)
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState('')
+  const [gameState, setGameState] = useState<GameState | null>(null)
+  const [roomId, setRoomId] = useState<string | null>(null)
+  const [gsRowId, setGsRowId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!code) return
@@ -62,7 +63,6 @@ export default function Results() {
   const winner = gameState.players.find(p => p.userId === gameState.winnerId)
   const allPlayers = gameState.players
 
-  /* Best card for the winner display (first revealed, or any) */
   const winnerCard =
     winner?.cards.find(c => c.revealed) ??
     winner?.cards[0] ?? null
