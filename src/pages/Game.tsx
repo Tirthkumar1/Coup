@@ -15,315 +15,196 @@ import CardComponent from '../components/Card'
 import ActionLogComponent, { type ActionLogEntry } from '../components/ActionLog'
 import BotEngine from '../components/BotEngine'
 
-/* ── constants ─────────────────────────────── */
+/* ─── Noir styles injected once ─────────────────────────────────────────── */
+const NOIR_STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;700&display=swap');
+*{box-sizing:border-box}
+body{margin:0;background:#131313}
+.chamfer-sm{clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+.chamfer-md{clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.chamfer-lg{clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
+.chamfer-btn{clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px))}
+.action-btn{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:12px 8px;background:#1c1b1b;color:#e5e2e1;border:none;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);border-bottom:1px solid #2a2a2a;transition:background .15s,box-shadow .15s}
+.action-btn:hover:not(:disabled){background:#2a2a2a;box-shadow:0 0 20px rgba(246,190,59,.15)}
+.action-btn:disabled{opacity:.35;cursor:not-allowed}
+.action-btn.danger{color:#ffb4ab;border-bottom-color:rgba(200,8,21,.4)}
+.action-btn.danger:hover:not(:disabled){background:rgba(200,8,21,.15);box-shadow:0 0 20px rgba(200,8,21,.2)}
+.action-btn.primary{background:linear-gradient(135deg,#c80815,#93000a);color:#ffd7d2;font-weight:700;border-bottom:none}
+.action-btn.primary:hover:not(:disabled){background:linear-gradient(135deg,#e00a1a,#c80815);box-shadow:0 0 20px rgba(200,8,21,.35)}
+.react-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;padding:14px 24px;border:none;cursor:pointer;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));transition:all .15s}
+.react-btn.challenge{background:linear-gradient(135deg,#c80815,#93000a);color:#ffd7d2}
+.react-btn.challenge:hover{background:linear-gradient(135deg,#e00a1a,#c80815);box-shadow:0 0 24px rgba(200,8,21,.4)}
+.react-btn.block{background:transparent;border:1px solid #5d3f3c;color:#e6bdb8}
+.react-btn.block:hover{background:rgba(93,63,60,.2);box-shadow:0 0 20px rgba(246,190,59,.2)}
+.react-btn.pass{background:transparent;border:1px solid #2a2a2a;color:#5d3f3c}
+.react-btn.pass:hover{background:#1c1b1b;color:#ad8883}
+.react-btn:disabled{opacity:.35;cursor:not-allowed}
+.influence-card{position:relative;background:#1c1b1b;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);overflow:hidden;transition:transform .2s,box-shadow .2s}
+.influence-card.selectable{cursor:pointer;border:1px solid #c80815}
+.influence-card.selectable:hover{box-shadow:0 0 20px rgba(200,8,21,.3);transform:translateY(-2px)}
+.scroll-hide{scrollbar-width:none}
+.scroll-hide::-webkit-scrollbar{display:none}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fade-in{animation:fadeIn .3s ease forwards}
+.glass{backdrop-filter:blur(12px);background:rgba(32,31,31,.9)}
+.opp-card{background:#1c1b1b;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);padding:12px;position:relative;overflow:hidden;transition:opacity .3s}
+.target-row{display:flex;align-items:center;gap:12px;background:#2a2a2a;border:none;color:#e5e2e1;padding:12px 14px;cursor:pointer;transition:all .15s;text-align:left;width:100%;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+.target-row:hover{background:#353534;box-shadow:0 0 16px rgba(200,8,21,.2)}
+`
+
+/* ─── Types ─────────────────────────────────────────────────────────────── */
 const ACTION_LABELS: Partial<Record<ActionType, string>> = {
-  income: 'Income  +1💰',
-  foreign_aid: 'Foreign Aid  +2💰',
-  coup: 'Coup  −7💰',
-  tax: 'Tax (Duke)  +3💰',
-  assassinate: 'Assassinate  −3💰',
-  steal: 'Steal (Captain)',
-  exchange: 'Exchange (Ambassador)',
+  income: 'INCOME', foreign_aid: 'FOREIGN AID', coup: 'COUP',
+  tax: 'TAX', assassinate: 'ASSASSINATE', steal: 'STEAL', exchange: 'EXCHANGE',
 }
-
 const BLOCK_OPTIONS: Partial<Record<ActionType, Character[]>> = {
-  foreign_aid: ['Duke'],
-  assassinate: ['Contessa'],
-  steal: ['Captain', 'Ambassador'],
+  foreign_aid: ['Duke'], assassinate: ['Contessa'], steal: ['Captain', 'Ambassador'],
 }
-
 const TARGETED: ActionType[] = ['coup', 'assassinate', 'steal']
 
-/* ── helpers ───────────────────────────────── */
-function secondsLeft(deadline: string | null): number {
-  if (!deadline) return 0
-  return Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000))
+/* ─── Sub-components ─────────────────────────────────────────────────────── */
+function Pips({ count, dead }: { count: number; dead: boolean }) {
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {[0, 1].map(i => (
+        <span key={i} style={{
+          display: 'inline-block', width: 8, height: 12,
+          clipPath: 'polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%)',
+          background: dead ? '#93000a' : i < count ? '#c80815' : '#2a2a2a',
+        }} />
+      ))}
+    </div>
+  )
 }
 
-/* ── component ─────────────────────────────── */
+/* ─── Main Component ─────────────────────────────────────────────────────── */
 export default function Game() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
 
   /* auth */
   const [myId, setMyId] = useState<string>(() => localStorage.getItem('coup_guest_id') || '')
-
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user ?? null
-      if (u) setMyId(u.id)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      const u = session?.user ?? null
-      if (u) setMyId(u.id)
+    supabase.auth.getSession().then(({ data }) => { if (data.session?.user) setMyId(data.session.user.id) })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (s?.user) setMyId(s.user.id)
       else setMyId(localStorage.getItem('coup_guest_id') || '')
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  /* server state */
-  const [roomId, setRoomId] = useState<string | null>(null)
+  /* state */
   const [roomHostId, setRoomHostId] = useState<string | null>(null)
   const [gsRowId, setGsRowId] = useState<string | null>(null)
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
-  // Keep a ref to gsRowId so callbacks always have the latest value
-  const gsRowIdRef = useRef<string | null>(null)
-  useEffect(() => { gsRowIdRef.current = gsRowId }, [gsRowId])
-
-  // Keep a ref to gameState so callbacks always have the latest value
-  const gameStateRef = useRef<GameState | null>(null)
-  useEffect(() => { gameStateRef.current = gameState }, [gameState])
-
-  // Keep a ref to the name map for action log insertions
-  const nameMapRef = useRef<Record<string, string>>({})
-  useEffect(() => {
-    if (gameState) {
-      nameMapRef.current = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
-    }
-  }, [gameState])
-
-  /* ui state */
+  const [showLog, setShowLog] = useState(false)
   const [targetAction, setTargetAction] = useState<ActionType | null>(null)
   const [blockCharPicker, setBlockCharPicker] = useState(false)
-  const [countdown, setCountdown] = useState(0)
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const gsRowIdRef = useRef<string | null>(null)
+  const gameStateRef = useRef<GameState | null>(null)
+  const nameMapRef = useRef<Record<string, string>>({})
+  useEffect(() => { gsRowIdRef.current = gsRowId }, [gsRowId])
+  useEffect(() => { gameStateRef.current = gameState }, [gameState])
+  useEffect(() => {
+    if (gameState) nameMapRef.current = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
+  }, [gameState])
 
-  /* ── Fetch + subscribe ─────────────────────────────────────────────── */
+  /* boot */
   useEffect(() => {
     if (!code) return
-
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
+    let ch: ReturnType<typeof supabase.channel> | null = null
     const boot = async () => {
       const { data: room } = await supabase.from('rooms').select().eq('code', code).single()
       if (!room) return
-      setRoomId(room.id)
       setRoomHostId(room.host_id)
-
-      const { data: gs } = await supabase
-        .from('game_state').select().eq('room_id', room.id).single()
+      const { data: gs } = await supabase.from('game_state').select().eq('room_id', room.id).single()
       if (!gs) return
-      setGsRowId(gs.id)
-      gsRowIdRef.current = gs.id
+      setGsRowId(gs.id); gsRowIdRef.current = gs.id
+      const st = gs.payload as GameState
+      setGameState(st); gameStateRef.current = st
+      const nm = Object.fromEntries(st.players.map((p: { userId: string; displayName: string }) => [p.userId, p.displayName]))
+      nameMapRef.current = nm
+      const { data: logs } = await supabase.from('action_log').select().eq('game_state_id', gs.id).order('created_at')
+      if (logs) setActionLog(logs.map(l => ({ id: l.id, actorName: nm[l.actor_id] ?? '?', actionType: l.action_type, targetName: l.target_id ? nm[l.target_id] ?? '?' : undefined, createdAt: l.created_at })))
 
-      const state = gs.payload as GameState
-      setGameState(state)
-      gameStateRef.current = state
-
-      /* existing action log */
-      const nameMap = Object.fromEntries(state.players.map(p => [p.userId, p.displayName]))
-      nameMapRef.current = nameMap
-      const { data: logs } = await supabase
-        .from('action_log').select().eq('game_state_id', gs.id).order('created_at')
-      if (logs) {
-        setActionLog(logs.map(l => ({
-          id: l.id,
-          actorName: nameMap[l.actor_id] ?? 'Unknown',
-          actionType: l.action_type,
-          targetName: l.target_id ? (nameMap[l.target_id] ?? 'Unknown') : undefined,
-          createdAt: l.created_at,
-        })))
-      }
-
-      channel = supabase
-        .channel(`game-${room.id}`)
-        .on('postgres_changes', {
-          event: 'UPDATE', schema: 'public', table: 'game_state',
-          filter: `room_id=eq.${room.id}`,
-        }, ({ new: row }) => {
-          const next = (row as { payload: GameState }).payload
-          if (!next || !next.players) return // guard malformed updates
-          setGameState(next)
-          gameStateRef.current = next
-          if (next.phase === 'game_over') navigate(`/results/${code}`)
-        })
-        .on('postgres_changes', {
-          event: 'INSERT', schema: 'public', table: 'action_log',
-          filter: `game_state_id=eq.${gs.id}`,
-        }, ({ new: log }) => {
-          const l = log as { id: string; actor_id: string; action_type: string; target_id?: string; created_at: string }
-          // Use the ref so we always have current player names
-          const nm = nameMapRef.current
-          setActionLog(prev => {
-            if (prev.find(e => e.id === l.id)) return prev
-            return [...prev, {
-              id: l.id,
-              actorName: nm[l.actor_id] ?? 'Unknown',
-              actionType: l.action_type,
-              targetName: l.target_id ? (nm[l.target_id] ?? 'Unknown') : undefined,
-              createdAt: l.created_at,
-            }]
+      ch = supabase.channel(`game-${room.id}`)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_state', filter: `room_id=eq.${room.id}` },
+          ({ new: row }) => {
+            const next = (row as { payload: GameState }).payload
+            if (!next?.players) return
+            setGameState(next); gameStateRef.current = next
+            if (next.phase === 'game_over') navigate(`/results/${code}`)
           })
-        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'action_log', filter: `game_state_id=eq.${gs.id}` },
+          ({ new: log }) => {
+            const l = log as { id: string; actor_id: string; action_type: string; target_id?: string; created_at: string }
+            const nm2 = nameMapRef.current
+            setActionLog(prev => prev.find(e => e.id === l.id) ? prev : [...prev, { id: l.id, actorName: nm2[l.actor_id] ?? '?', actionType: l.action_type, targetName: l.target_id ? nm2[l.target_id] ?? '?' : undefined, createdAt: l.created_at }])
+          })
         .subscribe()
     }
-
     boot()
-    return () => { channel && supabase.removeChannel(channel) }
+    return () => { ch && supabase.removeChannel(ch) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
-  /* ── Countdown timer ───────────────────────────────────────────────── */
-  useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current)
-    if (!gameState?.challengeDeadline) { setCountdown(0); return }
-
-    const tick = () => {
-      const s = secondsLeft(gameStateRef.current?.challengeDeadline ?? null)
-      setCountdown(s)
-      if (s === 0 && timerRef.current) {
-        clearInterval(timerRef.current)
-        /* actor auto-passes when window expires */
-        const gs = gameStateRef.current
-        if (gs && gs.currentTurnUserId === myId) {
-          applyActionLocally('pass', myId, undefined)
-        }
-      }
-    }
-    tick()
-    timerRef.current = setInterval(tick, 250)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.challengeDeadline, myId])
-
-  /* ── CORE FIX: Always fetch fresh state from Supabase before mutating ── */
-  // This is what prevents the desync crash. Never trust local React state
-  // as the base for computing the next state — always re-fetch first.
-  const fetchFreshState = useCallback(async (): Promise<{ state: GameState; rowId: string } | null> => {
+  /* core action machinery */
+  const fetchFresh = useCallback(async () => {
     const rowId = gsRowIdRef.current
     if (!rowId) return null
-    const { data: gs, error } = await supabase
-      .from('game_state')
-      .select('id, payload')
-      .eq('id', rowId)
-      .single()
-    if (error || !gs || !gs.payload) return null
+    const { data: gs } = await supabase.from('game_state').select('id,payload').eq('id', rowId).single()
+    if (!gs?.payload) return null
     return { state: gs.payload as GameState, rowId: gs.id }
   }, [])
 
-  /* ── Write to Supabase ─────────────────────────────────────────────── */
-  const commitState = useCallback(async (
-    nextState: GameState,
-    action: ActionType,
-    actorId: string,
-    targetId: string | undefined,
-    rowId: string,
-  ) => {
-    // Single atomic write — both payload AND individual columns updated together
-    const { error: updateErr } = await supabase.from('game_state').update({
-      payload: nextState,
-      phase: nextState.phase,
-      current_turn_user_id: nextState.currentTurnUserId,
-      treasury_coins: nextState.treasuryCoins,
-      winner_id: nextState.winnerId,
-      losing_influence_user_id: nextState.losingInfluenceUserId,
-      updated_at: new Date().toISOString(),
-    }).eq('id', rowId)
-
-    if (updateErr) throw new Error(updateErr.message)
-
-    // Log the action (best-effort — don't block on failure)
-    await supabase.from('action_log').insert({
-      game_state_id: rowId,
-      actor_id: actorId,
-      action_type: action,
-      target_id: targetId ?? null,
-      payload: {},
-    }).then(({ error: logErr }) => {
-      if (logErr) console.warn('action_log insert failed:', logErr.message)
-    })
+  const commitState = useCallback(async (next: GameState, action: ActionType, actorId: string, targetId: string | undefined, rowId: string) => {
+    await supabase.from('game_state').update({ payload: next, phase: next.phase, current_turn_user_id: next.currentTurnUserId, treasury_coins: next.treasuryCoins, winner_id: next.winnerId, losing_influence_user_id: next.losingInfluenceUserId, updated_at: new Date().toISOString() }).eq('id', rowId)
+    await supabase.from('action_log').insert({ game_state_id: rowId, actor_id: actorId, action_type: action, target_id: targetId ?? null, payload: {} })
   }, [])
 
-  /* ── Apply action (THE KEY FIX: fetch fresh state first) ───────────── */
-  const applyActionLocally = useCallback(async (
-    action: ActionType,
-    actorId: string,
-    targetId?: string,
-    character?: Character | string,
-  ) => {
-    if (loading) return // prevent double-submits
-    setLoading(true)
-    setError('')
-
+  const applyActionLocally = useCallback(async (action: ActionType, actorId: string, targetId?: string, character?: Character | string) => {
+    if (loading) return
+    setLoading(true); setError('')
     try {
-      // ALWAYS fetch the latest state from DB before computing next state
-      // This prevents Player A's stale state from overwriting Player B's move
-      const fresh = await fetchFreshState()
-      if (!fresh) throw new Error('Could not fetch current game state')
-
-      const { state: currentState, rowId } = fresh
-
-      let nextState: GameState
-      if (action === 'lose_influence') {
-        nextState = loseInfluence(currentState, actorId, parseInt(targetId ?? '0', 10))
-      } else {
-        nextState = applyAction(currentState, actorId, action, targetId, character as Character)
-      }
-
-      // Update local UI immediately (optimistic)
-      setGameState(nextState)
-      gameStateRef.current = nextState
-
-      // Reset UI state
-      if (actorId === myId) {
-        setTargetAction(null)
-        setBlockCharPicker(false)
-      }
-
-      // Commit to Supabase (realtime will sync all other players)
-      await commitState(nextState, action, actorId, targetId, rowId)
-
+      const fresh = await fetchFresh()
+      if (!fresh) throw new Error('Could not fetch game state')
+      const next = action === 'lose_influence'
+        ? loseInfluence(fresh.state, actorId, parseInt(targetId ?? '0', 10))
+        : applyAction(fresh.state, actorId, action, targetId, character as Character)
+      setGameState(next); gameStateRef.current = next
+      if (actorId === myId) { setTargetAction(null); setBlockCharPicker(false) }
+      await commitState(next, action, actorId, targetId, fresh.rowId)
     } catch (e: unknown) {
-      const msg = (e as Error).message
-      if (actorId === myId) setError(msg)
-      // Rollback: restore from DB
-      const fresh = await fetchFreshState()
-      if (fresh) {
-        setGameState(fresh.state)
-        gameStateRef.current = fresh.state
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [loading, myId, fetchFreshState, commitState])
+      if (actorId === myId) setError((e as Error).message)
+      const fresh = await fetchFresh()
+      if (fresh) { setGameState(fresh.state); gameStateRef.current = fresh.state }
+    } finally { setLoading(false) }
+  }, [loading, myId, fetchFresh, commitState])
 
-  const handleAction = useCallback(async (
-    action: ActionType,
-    targetId?: string,
-    character?: Character,
-  ) => {
-    return applyActionLocally(action, myId, targetId, character)
-  }, [applyActionLocally, myId])
+  const handleAction = useCallback((action: ActionType, targetId?: string, character?: Character) =>
+    applyActionLocally(action, myId, targetId, character), [applyActionLocally, myId])
+  const handleLose = useCallback((i: number) => applyActionLocally('lose_influence', myId, i.toString()), [applyActionLocally, myId])
+  const commitAction = useCallback(async (_s: GameState, action: ActionType, actorId: string, targetId: string | undefined) =>
+    applyActionLocally(action, actorId, targetId), [applyActionLocally])
 
-  const handleLoseInfluence = useCallback(async (cardIndex: number) => {
-    return applyActionLocally('lose_influence', myId, cardIndex.toString())
-  }, [applyActionLocally, myId])
-
-  // commitAction wrapper for BotEngine compatibility
-  const commitAction = useCallback(async (
-    _state: GameState, // ignored — bot engine now uses applyActionLocally which fetches fresh
-    action: ActionType,
-    actorId: string,
-    targetId: string | undefined,
-  ) => {
-    await applyActionLocally(action, actorId, targetId)
-  }, [applyActionLocally])
-
-  /* ── Guards ────────────────────────────────────────────────────────── */
-  if (!gameState) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-white text-xl animate-pulse">Loading game…</div>
+  /* loading screen */
+  if (!gameState) return (
+    <>
+      <style>{NOIR_STYLES}</style>
+      <div style={{ minHeight: '100dvh', background: '#131313', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div style={{ width: 36, height: 36, border: '2px solid #c80815', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <p style={{ fontFamily: 'Space Grotesk,sans-serif', color: '#5d3f3c', fontSize: 10, letterSpacing: '0.2em' }}>ESTABLISHING CONNECTION</p>
       </div>
-    )
-  }
+    </>
+  )
 
-  /* ── Derived ───────────────────────────────────────────────────────── */
+  /* derived */
   const nameMap = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
   const myPlayer = gameState.players.find(p => p.userId === myId)
   const opponents = gameState.players.filter(p => p.userId !== myId)
@@ -332,315 +213,288 @@ export default function Game() {
   const pending = gameState.pendingAction
   const iCanChallenge = canChallenge(gameState, myId)
   const iCanBlock = canBlock(gameState, myId)
-
-  const showReactOverlay = ['challenge_window', 'block_window', 'block_challenge_window'].includes(gameState.phase)
-  const showLoseModal = gameState.phase === 'lose_influence' && gameState.losingInfluenceUserId === myId
-
+  const showReact = ['challenge_window', 'block_window', 'block_challenge_window'].includes(gameState.phase)
+  const showLose = gameState.phase === 'lose_influence' && gameState.losingInfluenceUserId === myId
   const blockOpts = pending ? (BLOCK_OPTIONS[pending.action] ?? []) : []
 
-  /* countdown ring */
-  const ringPct = gameState.challengeDeadline
-    ? Math.max(0, countdown / 7) * 100
-    : 100
-  const ringColor = countdown <= 2 ? '#ef4444' : countdown <= 4 ? '#f59e0b' : '#22c55e'
+  const pendingLabel = pending?.blockerId
+    ? `${nameMap[pending.blockerId]?.toUpperCase() ?? '?'} BLOCKS AS ${pending.blockerCharacter?.toUpperCase()}`
+    : `${nameMap[pending?.actorId ?? '']?.toUpperCase() ?? '?'} CLAIMS ${pending?.action === 'tax' ? 'DUKE' : pending?.action === 'assassinate' ? 'ASSASSIN' : pending?.action === 'steal' ? 'CAPTAIN' : pending?.action === 'exchange' ? 'AMBASSADOR' : pending?.action === 'foreign_aid' ? 'FOREIGN AID' : (pending?.action ?? '').toUpperCase()}`
 
-  /* ────────────────────────────────────────────────────────────────────
-   *  RENDER
-   * ───────────────────────────────────────────────────────────────────*/
+  /* ── RENDER ──────────────────────────────────────────────────────────── */
+  const S = {
+    root: { minHeight: '100dvh', background: '#131313', display: 'flex', flexDirection: 'column' as const, fontFamily: 'Space Grotesk,sans-serif', color: '#e5e2e1', overflowX: 'hidden' as const },
+    header: { background: 'rgba(14,14,14,.9)', backdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderBottom: '1px solid rgba(93,63,60,.2)', position: 'sticky' as const, top: 0, zIndex: 50, flexShrink: 0 },
+    main: { flex: 1, overflowY: 'auto' as const, padding: '14px 14px 100px', display: 'flex', flexDirection: 'column' as const, gap: 10 },
+    nav: { position: 'fixed' as const, bottom: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(14,14,14,.95)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(93,63,60,.2)', padding: '8px 0 12px' },
+    navInner: { display: 'flex', justifyContent: 'space-around', alignItems: 'center' },
+    navBtn: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', color: '#353534', padding: 8, transition: 'color .2s', fontFamily: 'Space Grotesk,sans-serif' },
+    navActive: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2, background: '#1c1b1b', padding: '8px 16px', color: '#f6be3b', fontFamily: 'Space Grotesk,sans-serif' },
+    mono: { fontFamily: 'Inter,monospace' },
+    serif: { fontFamily: 'Newsreader,serif', fontStyle: 'italic' as const },
+    overlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24, backdropFilter: 'blur(4px)' },
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col select-none">
+    <>
+      <style>{NOIR_STYLES}</style>
+      <div style={S.root}>
 
-      {/* Bot Engine Mount */}
-      {roomId && roomHostId === myId && (
-        <BotEngine
-          gameState={gameState}
-          hostId={roomHostId}
-          myId={myId}
-          commitAction={commitAction}
-          applyActionLocally={applyActionLocally}
-        />
-      )}
+        {/* header */}
+        <header style={S.header}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ color: '#c80815', fontSize: 13, fontWeight: 800 }}>{'>'}_</span>
+            <div>
+              <div style={{ color: '#c80815', fontSize: 10, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase' }}>ROOM: {code}</div>
+              <div style={{ color: '#5d3f3c', fontSize: 9, ...S.mono, letterSpacing: '0.1em' }}>SESSION ACTIVE · OPERATION NOIR</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: '#5d3f3c', fontSize: 9, ...S.mono, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Treasury</div>
+              <div style={{ color: '#f6be3b', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em' }}>{gameState.treasuryCoins} GOLD</div>
+            </div>
+            <button onClick={() => setShowLog(v => !v)} className="chamfer-sm" style={{ background: showLog ? '#1c1b1b' : 'none', border: '1px solid #2a2a2a', color: showLog ? '#f6be3b' : '#5d3f3c', cursor: 'pointer', padding: '6px 10px', fontSize: 9, letterSpacing: '0.15em', fontFamily: 'Space Grotesk,sans-serif', textTransform: 'uppercase' }}>
+              INTEL
+            </button>
+          </div>
+        </header>
 
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-4 py-2 bg-gray-900/80 backdrop-blur border-b border-gray-800 flex-shrink-0">
-        <span className="text-amber-400 font-black tracking-wider text-lg">COUP</span>
-        <span className="text-gray-400 text-sm font-mono">{code}</span>
-        <span className="text-sm">
-          <span className="text-gray-500">Treasury </span>
-          <span className="text-amber-400 font-bold">{gameState.treasuryCoins}💰</span>
-        </span>
-      </header>
+        {/* bot engine */}
+        {roomHostId === myId && (
+          <BotEngine gameState={gameState} hostId={roomHostId} myId={myId} commitAction={commitAction} applyActionLocally={applyActionLocally} />
+        )}
 
-      <div className="flex flex-1 overflow-hidden">
+        {/* main */}
+        <main style={S.main} className="scroll-hide">
 
-        {/* ── Main area ───────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col p-3 gap-3 overflow-y-auto">
-
-          {/* Opponents */}
-          <div className="flex gap-3 flex-wrap">
-            {opponents.map(opp => {
-              const isTheirTurn = gameState.currentTurnUserId === opp.userId
+          {/* opponents */}
+          <div style={{ display: 'grid', gridTemplateColumns: opponents.length === 1 ? '1fr' : 'repeat(2,1fr)', gap: 8 }}>
+            {opponents.map((opp, idx) => {
+              const active = gameState.currentTurnUserId === opp.userId
+              const alive = opp.cards.filter(c => !c.revealed).length
               return (
-                <div
-                  key={opp.userId}
-                  className={[
-                    'flex-1 min-w-[160px] bg-gray-900 rounded-2xl p-3 border transition-colors',
-                    isTheirTurn ? 'border-amber-500 shadow-lg shadow-amber-900/20' : 'border-gray-800',
-                    opp.isEliminated ? 'opacity-40 grayscale' : '',
-                  ].join(' ')}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                      {opp.displayName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{opp.displayName}</div>
-                      <div className="text-xs text-amber-400">{opp.coins}💰</div>
-                    </div>
-                    {isTheirTurn && <span className="text-amber-400 text-xs ml-auto animate-pulse">▶ Turn</span>}
-                    {opp.isEliminated && <span className="text-red-400 text-xs ml-auto">Out</span>}
+                <div key={opp.userId} className="opp-card chamfer-sm" style={{ borderLeft: idx % 2 === 0 ? '2px solid #c80815' : 'none', borderRight: idx % 2 === 1 ? '2px solid #f6be3b' : 'none', opacity: opp.isEliminated ? 0.4 : 1, filter: opp.isEliminated ? 'grayscale(1)' : 'none' }}>
+                  {active && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg,transparent,#f6be3b,transparent)' }} />}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    {idx % 2 === 0 ? (
+                      <>
+                        <div>
+                          <p style={{ ...S.serif, fontSize: 13, color: '#e5e2e1', margin: '0 0 4px' }}>{opp.displayName}</p>
+                          <Pips count={alive} dead={opp.isEliminated} />
+                        </div>
+                        <div className="chamfer-sm" style={{ width: 36, height: 36, background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#5d3f3c' }}>
+                          {opp.displayName.charAt(0).toUpperCase()}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="chamfer-sm" style={{ width: 36, height: 36, background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#5d3f3c' }}>
+                          {opp.displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ ...S.serif, fontSize: 13, color: '#e5e2e1', margin: '0 0 4px' }}>{opp.displayName}</p>
+                          <Pips count={alive} dead={opp.isEliminated} />
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="flex gap-2">
-                    {opp.cards.map((card, i) => (
-                      <CardComponent
-                        key={i}
-                        card={card}
-                        forceHidden={!card.revealed}
-                        size="sm"
-                        eliminated={opp.isEliminated}
-                      />
-                    ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, ...S.mono, color: '#5d3f3c', letterSpacing: '0.1em', textTransform: 'uppercase' }}>LIQUIDITY</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#f6be3b', letterSpacing: '0.1em' }}>{opp.coins} GOLD</span>
                   </div>
+                  {active && <div style={{ marginTop: 5, fontSize: 8, color: '#f6be3b', ...S.mono, letterSpacing: '0.2em' }}>▶ ACTIVE OPERATIVE</div>}
+                  {opp.isEliminated && <div style={{ marginTop: 4, fontSize: 8, color: '#93000a', ...S.mono, letterSpacing: '0.2em' }}>■ ELIMINATED</div>}
                 </div>
               )
             })}
           </div>
 
-          {/* Turn indicator + action buttons */}
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-4">
-            {error && (
-              <div className="bg-red-950 border border-red-700 text-red-300 text-sm px-4 py-2 rounded-xl max-w-sm text-center">
-                {error}
-                <button onClick={() => setError('')} className="ml-2 text-red-500 hover:text-red-300">✕</button>
-              </div>
-            )}
-
-            {loading && (
-              <div className="text-gray-500 text-sm animate-pulse">Processing…</div>
-            )}
-
-            {isMyTurn && gameState.phase === 'player_turn' && !loading ? (
-              <>
-                <div className="text-amber-400 font-bold text-xl">Your Turn</div>
-                <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                  {validActs.map(action => (
-                    <button
-                      key={action}
-                      disabled={loading}
-                      onClick={() => TARGETED.includes(action) ? setTargetAction(action) : handleAction(action)}
-                      className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                    >
-                      {ACTION_LABELS[action] ?? action}
+          {/* battlefield */}
+          {showReact ? (
+            <div className="fade-in" style={{ background: 'rgba(200,8,21,.04)', borderTop: '1px solid rgba(200,8,21,.3)', borderBottom: '1px solid rgba(200,8,21,.3)', padding: '22px 16px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.04, fontSize: 160, color: '#c80815', pointerEvents: 'none', userSelect: 'none' }}>◈</div>
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'inline-block', borderTop: '1px solid rgba(200,8,21,.35)', borderBottom: '1px solid rgba(200,8,21,.35)', padding: '10px 24px', marginBottom: 14 }}>
+                  <h2 style={{ ...S.serif, fontSize: 20, color: '#e5e2e1', margin: 0 }}>{pendingLabel}</h2>
+                  <p style={{ fontSize: 9, color: '#c80815', letterSpacing: '0.25em', textTransform: 'uppercase', margin: '4px 0 0', ...S.mono }}>
+                    {pending?.targetId ? `TARGET: ${nameMap[pending.targetId]?.toUpperCase() ?? '?'}` : 'PENDING COUNTER-MEASURES'}
+                  </p>
+                </div>
+                {error && (
+                  <div className="chamfer-sm" style={{ background: 'rgba(147,0,10,.2)', padding: '8px 16px', marginBottom: 12, fontSize: 10, color: '#ffb4ab', letterSpacing: '0.1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{error}</span>
+                    <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: '#c80815', cursor: 'pointer', marginLeft: 8 }}>✕</button>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {iCanChallenge && <button className="react-btn challenge" onClick={() => handleAction('challenge')} disabled={loading}>CHALLENGE</button>}
+                  {iCanBlock && !blockCharPicker && (
+                    <button className="react-btn block" onClick={() => blockOpts.length === 1 ? handleAction('block', undefined, blockOpts[0]) : setBlockCharPicker(true)} disabled={loading}>BLOCK</button>
+                  )}
+                  {blockCharPicker && blockOpts.map(ch => (
+                    <button key={ch} className="react-btn block" onClick={() => { handleAction('block', undefined, ch); setBlockCharPicker(false) }} disabled={loading}>
+                      BLOCK AS {ch.toUpperCase()}
                     </button>
                   ))}
+                  <button className="react-btn pass" onClick={() => handleAction('pass')} disabled={loading}>PASS</button>
                 </div>
-              </>
-            ) : (
-              <div className="text-gray-600 text-base">
-                {nameMap[gameState.currentTurnUserId] ?? '…'}&apos;s turn
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '14px 0', position: 'relative' }}>
+              {isMyTurn && gameState.phase === 'player_turn' ? (
+                <div className="fade-in" style={{ display: 'inline-block', borderTop: '1px solid rgba(246,190,59,.3)', borderBottom: '1px solid rgba(246,190,59,.3)', padding: '8px 24px' }}>
+                  <p style={{ ...S.serif, fontSize: 17, color: '#f6be3b', margin: 0 }}>Your Move</p>
+                  <p style={{ fontSize: 9, color: '#5d3f3c', letterSpacing: '0.2em', margin: '2px 0 0', ...S.mono }}>SELECT AN OPERATION BELOW</p>
+                </div>
+              ) : (
+                <div style={{ display: 'inline-block', borderTop: '1px solid #2a2a2a', borderBottom: '1px solid #2a2a2a', padding: '8px 24px' }}>
+                  <p style={{ ...S.serif, fontSize: 16, color: '#5d3f3c', margin: 0 }}>{nameMap[gameState.currentTurnUserId] ?? '…'}</p>
+                  <p style={{ fontSize: 9, color: '#2a2a2a', letterSpacing: '0.2em', margin: '2px 0 0', ...S.mono }}>AWAITING OPERATIVE</p>
+                </div>
+              )}
+              {loading && <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 48, height: 1, background: 'linear-gradient(90deg,transparent,#c80815,transparent)' }} />}
+            </div>
+          )}
 
-          {/* My hand */}
+          {/* my hand */}
           {myPlayer && (
-            <div className={[
-              'bg-gray-900 rounded-2xl p-4 border transition-colors',
-              isMyTurn ? 'border-amber-500 shadow-lg shadow-amber-900/20' : 'border-gray-800',
-            ].join(' ')}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-amber-700 flex items-center justify-center font-bold flex-shrink-0">
-                  {myPlayer.displayName.charAt(0).toUpperCase()}
+            <div className="chamfer-md" style={{ background: '#1c1b1b', padding: 16, position: 'relative', overflow: 'hidden' }}>
+              {isMyTurn && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#f6be3b 30%,#f6be3b 70%,transparent)' }} />}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {myPlayer.cards.map((card, i) => (
+                    <div key={i} className="influence-card" style={{ width: 96, height: 144, border: card.revealed ? '1px solid #2a2a2a' : '1px solid rgba(200,8,21,.4)' }}>
+                      <CardComponent card={card} size="md" alwaysShow />
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <div className="font-semibold">{myPlayer.displayName} <span className="text-gray-500 text-xs">(you)</span></div>
-                  <div className="text-amber-400 text-sm">{myPlayer.coins}💰</div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 9, ...S.mono, color: '#5d3f3c', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 2 }}>YOUR LIQUIDITY</div>
+                  <div style={{ fontWeight: 800, fontSize: 34, color: '#f6be3b', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                    {myPlayer.coins}<span style={{ fontSize: 13, marginLeft: 4, fontWeight: 600 }}>GOLD</span>
+                  </div>
+                  {myPlayer.isEliminated && <div style={{ fontSize: 9, color: '#93000a', letterSpacing: '0.2em', marginTop: 4, ...S.mono }}>■ ELIMINATED</div>}
                 </div>
-                {myPlayer.isEliminated && <span className="text-red-400 text-sm ml-auto">Eliminated</span>}
-                {isMyTurn && <span className="text-amber-400 text-xs ml-auto animate-pulse">▶ Your turn</span>}
-              </div>
-              <div className="flex gap-3">
-                {myPlayer.cards.map((card, i) => (
-                  <CardComponent key={i} card={card} size="md" alwaysShow={true} />
-                ))}
               </div>
             </div>
           )}
-        </div>
 
-        {/* ── Action log sidebar ───────────────────────────────────── */}
-        <aside className="w-56 bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0">
-          <div className="px-3 py-2 border-b border-gray-800 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Action Log
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <ActionLogComponent entries={actionLog} />
-          </div>
-        </aside>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-       *  TARGET PICKER MODAL
-       * ═══════════════════════════════════════════════════════════════*/}
-      {targetAction && (
-        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700 shadow-2xl">
-            <h3 className="text-lg font-bold mb-1">
-              {ACTION_LABELS[targetAction] ?? targetAction}
-            </h3>
-            <p className="text-gray-500 text-sm mb-4">Choose a target</p>
-            <div className="space-y-2">
-              {gameState.players
-                .filter(p => p.userId !== myId && !p.isEliminated)
-                .map(p => (
-                  <button
-                    key={p.userId}
-                    onClick={() => { setTargetAction(null); handleAction(targetAction, p.userId) }}
-                    className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-600 text-white px-4 py-3 rounded-xl transition-all"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                      {p.displayName.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="font-semibold flex-1 text-left">{p.displayName}</span>
-                    <span className="text-amber-400 text-sm">{p.coins}💰</span>
-                  </button>
-                ))}
-            </div>
-            <button
-              onClick={() => setTargetAction(null)}
-              className="w-full text-gray-500 hover:text-gray-300 text-sm mt-4 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════
-       *  CHALLENGE / BLOCK OVERLAY
-       * ═══════════════════════════════════════════════════════════════*/}
-      {showReactOverlay && !loading && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-amber-900/60 shadow-2xl">
-
-            {/* Action description */}
-            <div className="text-center mb-4">
-              <p className="text-gray-300 text-sm mb-3">
-                <span className="font-bold text-white">{nameMap[pending?.actorId ?? ''] ?? '?'}</span>
-                {pending?.blockerId
-                  ? ` blocks as ${pending.blockerCharacter}`
-                  : ` declares ${ACTION_LABELS[pending?.action ?? 'pass'] ?? pending?.action}`}
-                {pending?.targetId && (
-                  <> → <span className="font-bold text-white">{nameMap[pending.targetId] ?? '?'}</span></>
-                )}
-              </p>
-
-              {/* Countdown ring */}
-              <div className="relative inline-flex items-center justify-center w-16 h-16 mb-2">
-                <svg className="absolute inset-0 w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-                  <circle cx="32" cy="32" r="28" fill="none" stroke="#374151" strokeWidth="4" />
-                  <circle
-                    cx="32" cy="32" r="28" fill="none"
-                    stroke={ringColor} strokeWidth="4"
-                    strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 28}`}
-                    strokeDashoffset={`${2 * Math.PI * 28 * (1 - ringPct / 100)}`}
-                    style={{ transition: 'stroke-dashoffset 0.25s linear, stroke 0.25s' }}
-                  />
-                </svg>
-                <span className="text-xl font-bold" style={{ color: ringColor }}>{countdown}</span>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex flex-col gap-2">
-              {iCanChallenge && (
-                <button
-                  onClick={() => handleAction('challenge')}
-                  disabled={loading}
-                  className="w-full bg-red-900 hover:bg-red-800 border border-red-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-40"
-                >
-                  🎯 Challenge
-                </button>
-              )}
-
-              {iCanBlock && !blockCharPicker && (
-                <button
-                  onClick={() => blockOpts.length === 1 ? handleAction('block', undefined, blockOpts[0]) : setBlockCharPicker(true)}
-                  disabled={loading}
-                  className="w-full bg-blue-900 hover:bg-blue-800 border border-blue-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-40"
-                >
-                  🛡️ Block
-                </button>
-              )}
-
-              {blockCharPicker && (
-                <div className="bg-gray-800 rounded-xl p-3">
-                  <p className="text-gray-400 text-xs mb-2 text-center">Block with which character?</p>
-                  <div className="flex gap-2">
-                    {blockOpts.map(char => (
-                      <button
-                        key={char}
-                        onClick={() => { handleAction('block', undefined, char); setBlockCharPicker(false) }}
-                        className="flex-1 bg-blue-900 hover:bg-blue-800 text-white py-2 rounded-lg text-sm font-bold transition-colors"
-                      >
-                        {char}
-                      </button>
-                    ))}
-                  </div>
+          {/* action grid */}
+          {isMyTurn && gameState.phase === 'player_turn' && !myPlayer?.isEliminated && (
+            <div className="fade-in">
+              {error && (
+                <div className="chamfer-sm" style={{ background: 'rgba(147,0,10,.15)', padding: '8px 12px', marginBottom: 8, fontSize: 10, color: '#ffb4ab', letterSpacing: '0.1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{error}</span>
+                  <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: '#c80815', cursor: 'pointer' }}>✕</button>
                 </div>
               )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 3 }}>
+                <button className="action-btn" disabled={!validActs.includes('income') || loading} onClick={() => handleAction('income')}>INCOME</button>
+                <button className="action-btn" disabled={!validActs.includes('foreign_aid') || loading} onClick={() => handleAction('foreign_aid')}>FOREIGN AID</button>
+                <button className="action-btn" disabled={!validActs.includes('tax') || loading} onClick={() => handleAction('tax')}>TAX</button>
+                <button className="action-btn" disabled={!validActs.includes('steal') || loading} onClick={() => setTargetAction('steal')}>STEAL</button>
+                <button className="action-btn primary" style={{ gridColumn: 'span 2' }} disabled={!validActs.includes('assassinate') || loading} onClick={() => setTargetAction('assassinate')}>ASSASSINATE</button>
+                <button className="action-btn" disabled={!validActs.includes('exchange') || loading} onClick={() => handleAction('exchange')}>EXCHANGE</button>
+                <button className="action-btn danger" disabled={!validActs.includes('coup') || loading} onClick={() => setTargetAction('coup')}>COUP</button>
+              </div>
+            </div>
+          )}
 
-              <button
-                onClick={() => handleAction('pass')}
-                disabled={loading}
-                className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 font-semibold py-3 rounded-xl transition-colors disabled:opacity-40"
-              >
-                Pass
+        </main>
+
+        {/* bottom nav */}
+        <nav style={S.nav}>
+          <div style={S.navInner}>
+            <button style={S.navBtn} onClick={() => navigate('/')}
+              onMouseEnter={e => (e.currentTarget.style.color = '#c80815')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#353534')}>
+              <span style={{ fontSize: 20 }}>⬡</span>
+              <span style={{ fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase' }}>LOBBY</span>
+            </button>
+            <div className="chamfer-sm" style={S.navActive}>
+              <span style={{ fontSize: 20 }}>◈</span>
+              <span style={{ fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700 }}>INFLUENCE</span>
+            </div>
+            <button style={{ ...S.navBtn, color: showLog ? '#f6be3b' : '#353534' }} onClick={() => setShowLog(v => !v)}>
+              <span style={{ fontSize: 20 }}>⊞</span>
+              <span style={{ fontSize: 8, letterSpacing: '0.2em', textTransform: 'uppercase' }}>INTEL</span>
+            </button>
+          </div>
+        </nav>
+
+        {/* target picker */}
+        {targetAction && (
+          <div style={S.overlay}>
+            <div className="chamfer-md fade-in" style={{ background: '#1c1b1b', padding: 24, width: '100%', maxWidth: 340, borderLeft: '2px solid #c80815' }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 9, ...S.mono, color: '#c80815', letterSpacing: '0.25em', marginBottom: 4 }}>OPERATION</div>
+                <h3 style={{ ...S.serif, fontSize: 22, margin: 0, color: '#e5e2e1' }}>{ACTION_LABELS[targetAction]}</h3>
+                <p style={{ fontSize: 9, color: '#5d3f3c', letterSpacing: '0.1em', margin: '4px 0 0', ...S.mono }}>SELECT TARGET OPERATIVE</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {gameState.players.filter(p => p.userId !== myId && !p.isEliminated).map(p => (
+                  <button key={p.userId} className="target-row" onClick={() => { setTargetAction(null); handleAction(targetAction, p.userId) }}>
+                    <div className="chamfer-sm" style={{ width: 30, height: 30, background: '#353534', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: '#ad8883', flexShrink: 0 }}>
+                      {p.displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ ...S.serif, fontSize: 14 }}>{p.displayName}</div>
+                      <div style={{ fontSize: 9, color: '#5d3f3c', ...S.mono, letterSpacing: '0.1em' }}>{p.cards.filter(c => !c.revealed).length} INFLUENCE · {p.coins} GOLD</div>
+                    </div>
+                    <span style={{ color: '#c80815', fontSize: 14 }}>→</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setTargetAction(null)} className="chamfer-sm" style={{ width: '100%', marginTop: 12, background: 'none', border: '1px solid #2a2a2a', color: '#5d3f3c', cursor: 'pointer', padding: 10, fontSize: 10, letterSpacing: '0.15em', fontFamily: 'Space Grotesk,sans-serif', textTransform: 'uppercase' }}>
+                ABORT
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-       *  LOSE INFLUENCE MODAL
-       * ═══════════════════════════════════════════════════════════════*/}
-      {showLoseModal && myPlayer && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-red-900/60 shadow-2xl text-center">
-            <div className="text-2xl mb-1">💀</div>
-            <h3 className="text-xl font-bold text-red-400 mb-1">Lose Influence</h3>
-            <p className="text-gray-500 text-sm mb-6">Choose a card to reveal</p>
-            <div className="flex gap-4 justify-center">
-              {myPlayer.cards.map((card, i) =>
-                !card.revealed ? (
-                  <div key={i} className="flex flex-col items-center gap-2">
-                    <CardComponent
-                      card={card}
-                      size="lg"
-                      selectable
-                      alwaysShow={true}
-                      onClick={() => handleLoseInfluence(i)}
-                    />
-                    <span className="text-xs text-gray-500">{card.character}</span>
+        {/* lose influence */}
+        {showLose && myPlayer && (
+          <div style={S.overlay}>
+            <div className="chamfer-md fade-in" style={{ background: '#1c1b1b', padding: 24, width: '100%', maxWidth: 360, borderLeft: '2px solid #93000a', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, ...S.mono, color: '#93000a', letterSpacing: '0.25em', marginBottom: 4 }}>DIRECTIVE</div>
+              <h3 style={{ ...S.serif, fontSize: 22, color: '#ffb4ab', margin: '0 0 4px' }}>Surrender Influence</h3>
+              <p style={{ fontSize: 9, color: '#5d3f3c', letterSpacing: '0.15em', margin: '0 0 20px', ...S.mono }}>SELECT IDENTITY TO REVEAL</p>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+                {myPlayer.cards.map((card, i) => !card.revealed ? (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div className="influence-card selectable" style={{ width: 96, height: 144 }} onClick={() => handleLose(i)}>
+                      <CardComponent card={card} size="md" alwaysShow selectable onClick={() => handleLose(i)} />
+                    </div>
+                    <span style={{ fontSize: 9, color: '#5d3f3c', letterSpacing: '0.1em', ...S.mono }}>{card.character.toUpperCase()}</span>
                   </div>
-                ) : null
-              )}
+                ) : null)}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* intel drawer */}
+        {showLog && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex' }} onClick={() => setShowLog(false)}>
+            <div style={{ flex: 1 }} />
+            <div className="glass fade-in" style={{ width: 260, height: '100%', borderLeft: '1px solid rgba(93,63,60,.3)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(93,63,60,.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#c80815', letterSpacing: '0.25em', ...S.mono }}>INTEL FEED</div>
+                  <div style={{ fontSize: 11, color: '#ad8883', letterSpacing: '0.1em' }}>ACTION LOG</div>
+                </div>
+                <button onClick={() => setShowLog(false)} style={{ background: 'none', border: 'none', color: '#5d3f3c', cursor: 'pointer', fontSize: 16 }}>✕</button>
+              </div>
+              <div style={{ flex: 1, overflow: 'hidden' }} className="scroll-hide">
+                <ActionLogComponent entries={actionLog} />
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </>
   )
 }
