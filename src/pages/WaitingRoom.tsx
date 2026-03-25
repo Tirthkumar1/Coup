@@ -48,17 +48,11 @@ export default function WaitingRoom() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
-  const [tick, setTick] = useState(0) // scanline animation
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
   }, [])
 
-  // Scanline flicker
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 2000)
-    return () => clearInterval(id)
-  }, [])
 
   useEffect(() => {
     if (!code) return

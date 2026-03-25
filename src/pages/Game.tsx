@@ -62,7 +62,6 @@ const ACTION_LABELS: Partial<Record<ActionType, string>> = {
 const BLOCK_OPTIONS: Partial<Record<ActionType, Character[]>> = {
   foreign_aid: ['Duke'], assassinate: ['Contessa'], steal: ['Captain', 'Ambassador'],
 }
-const TARGETED: ActionType[] = ['coup', 'assassinate', 'steal']
 
 /* ─── Sub-components ─────────────────────────────────────────────────────── */
 function Pips({ count, dead }: { count: number; dead: boolean }) {
