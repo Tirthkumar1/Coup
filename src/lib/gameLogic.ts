@@ -45,6 +45,7 @@ export type GamePhase =
   | 'block_challenge_window'
   | 'resolve'
   | 'lose_influence'
+  | 'exchange_choice'
   | 'game_over'
 
 export interface Card {
@@ -70,6 +71,12 @@ export interface PendingAction {
   blockerId?: string
   /** True once the block itself is being challenged. */
   blockBeingChallenged?: boolean
+  /**
+   * Set to true by _resolveAction when the action is fully resolved and we are
+   * only waiting for the final lose_influence step (e.g. assassination target
+   * revealing a card). Prevents the lose_influence handler from re-resolving.
+   */
+  actionFullyResolved?: boolean
 }
 
 export interface GameState {
@@ -403,8 +410,6 @@ export function applyAction(
 
     // ── PASS ─────────────────────────────────────────────────────────────────
     case 'pass': {
-      // Passing in block_window or block_challenge_window means no response.
-      // When all other players pass, resolve the original action.
       if (
         s.phase !== 'challenge_window' &&
         s.phase !== 'block_window' &&
@@ -413,16 +418,23 @@ export function applyAction(
         throw new Error('Cannot pass in this phase')
 
       if (s.phase === 'block_challenge_window') {
-        // Nobody challenges the block → original action is cancelled.
+        // Nobody challenged the block → block stands → cancel original action.
         return advanceTurn(s)
       }
 
       if (s.phase === 'block_window') {
-        // Nobody blocked → resolve original action (foreign_aid).
+        // Nobody blocked → resolve original action.
         return _resolveAction(s)
       }
 
-      // challenge_window pass → resolve original action.
+      // challenge_window pass: if action is blockable, open a block window;
+      // otherwise resolve immediately.
+      const blockable = BLOCK_CHARACTERS[s.pendingAction!.action]
+      if (blockable && blockable.length > 0) {
+        s.phase = 'block_window'
+        s.challengeDeadline = challengeDeadlineNow()
+        return s
+      }
       return _resolveAction(s)
     }
 
@@ -468,7 +480,7 @@ export function canChallenge(state: GameState, userId: string): boolean {
  * @param userId - Player wishing to block.
  */
 export function canBlock(state: GameState, userId: string): boolean {
-  if (state.phase !== 'challenge_window' && state.phase !== 'block_window')
+  if (state.phase !== 'block_window')
     return false
   const player = getPlayer(state, userId)
   if (player.isEliminated) return false
@@ -607,28 +619,24 @@ export function loseInfluence(
 
   const pending = s.pendingAction
 
-  // Determine what happens next based on why we were losing influence.
-  if (!pending) {
-    // Coup target – turn simply advances.
-    return advanceTurn(s)
-  }
+  // No pending action or coup – just advance the turn.
+  if (!pending || pending.action === 'coup') return advanceTurn(s)
 
-  const wasChallengerLosing =
-    pending.blockBeingChallenged === undefined
-      ? _challengerLost(s, userId, pending)
-      : !pending.blockBeingChallenged
+  // _resolveAction already ran for this action (e.g. assassination target
+  // revealing their card after the action was fully resolved).
+  if (pending.actionFullyResolved) return advanceTurn(s)
 
-  if (wasChallengerLosing) {
-    // Challenge failed → resolve the original action (or let block stand).
-    if (pending.blockerId) {
-      // Block was challenged but challenge failed → block stands → turn over.
-      return advanceTurn(s)
-    }
-    return _resolveAction(s)
-  } else {
-    // Actor/blocker was bluffing → action is cancelled, turn advances.
-    return advanceTurn(s)
-  }
+  // Actor was bluffing – challenge of action succeeded, action is cancelled.
+  if (userId === pending.actorId) return advanceTurn(s)
+
+  // Blocker was bluffing – challenge of block succeeded, action continues.
+  if (pending.blockerId && userId === pending.blockerId) return _resolveAction(s)
+
+  // Challenger lost:
+  //   blockBeingChallenged === true  → was challenging the block, block stands
+  //   blockBeingChallenged === false → was challenging the action, action continues
+  if (pending.blockBeingChallenged === true) return advanceTurn(s)
+  return _resolveAction(s)
 }
 
 /**
@@ -672,7 +680,8 @@ function _resolveAction(state: GameState): GameState {
       // Coins already deducted; target must now lose influence.
       s.losingInfluenceUserId = targetId!
       s.phase = 'lose_influence'
-      s.pendingAction = pending
+      // Mark resolved so loseInfluence knows not to re-run _resolveAction.
+      s.pendingAction = { ...pending, actionFullyResolved: true }
       s.challengeDeadline = null
       return s
     }
@@ -684,17 +693,14 @@ function _resolveAction(state: GameState): GameState {
       break
     }
     case 'exchange': {
-      // Draw 2 cards from deck and add to actor's hand; they must return 2.
-      // For simplicity this auto-returns the oldest 2 (a UI layer should let
-      // the player choose – replace this with an 'exchange_choice' phase).
+      // Draw up to 2 cards; player must choose which to keep in exchange_choice.
       const actor = getPlayer(s, actorId)
       const drawn = s.deck.splice(0, Math.min(2, s.deck.length))
       actor.cards.push(...drawn)
-      // Return the first 2 cards.
-      const returned = actor.cards.splice(0, 2)
-      s.deck.push(...returned)
-      s.deck = shuffle(s.deck)
-      break
+      s.phase = 'exchange_choice'
+      s.pendingAction = { ...pending, actionFullyResolved: true }
+      s.challengeDeadline = null
+      return s
     }
     default:
       break
@@ -704,13 +710,48 @@ function _resolveAction(state: GameState): GameState {
 }
 
 /**
- * Heuristic to decide whether `losingUserId` was the challenger
- * (vs the actor who was bluffing) based on who the pending action references.
+ * Complete an exchange by selecting which cards to keep.
+ * The player's hand temporarily holds their original (unrevealed) cards plus
+ * the 2 drawn cards. They pick exactly 2 indices to keep; the rest go back.
+ *
+ * @param state       - Current game state (phase must be 'exchange_choice').
+ * @param userId      - The player completing the exchange (must be the actor).
+ * @param keepIndices - Two 0-based indices into the player's current cards array.
  */
-function _challengerLost(
-  _state: GameState,
-  losingUserId: string,
-  pending: PendingAction,
-): boolean {
-  return losingUserId !== pending.actorId && losingUserId !== pending.blockerId
+export function chooseExchangeCards(
+  state: GameState,
+  userId: string,
+  keepIndices: [number, number],
+): GameState {
+  if (state.phase !== 'exchange_choice')
+    throw new Error('Not in exchange_choice phase')
+  const pending = state.pendingAction
+  if (!pending || pending.actorId !== userId)
+    throw new Error('Not your exchange to resolve')
+
+  let s = deepClone(state)
+  const actor = getPlayer(s, userId)
+
+  // Count how many unrevealed cards the player should keep (same as before exchange).
+  const unrevealedBefore = actor.cards.filter((c) => !c.revealed).length - 0
+  // They must keep exactly 2 cards total (matching their original hand size).
+  const mustKeep = 2
+  if (keepIndices.length !== mustKeep)
+    throw new Error(`Must keep exactly ${mustKeep} cards`)
+
+  const idxSet = new Set(keepIndices)
+  if (idxSet.size !== mustKeep) throw new Error('Duplicate card indices')
+  keepIndices.forEach((i) => {
+    if (i < 0 || i >= actor.cards.length) throw new Error(`Invalid card index ${i}`)
+    if (actor.cards[i].revealed) throw new Error('Cannot keep a revealed card')
+  })
+
+  const kept = keepIndices.map((i) => actor.cards[i])
+  const returned = actor.cards.filter((_, i) => !idxSet.has(i))
+
+  actor.cards = kept
+  s.deck.push(...returned)
+  s.deck = shuffle(s.deck)
+
+  return advanceTurn(s)
 }
