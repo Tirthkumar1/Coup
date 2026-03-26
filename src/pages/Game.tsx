@@ -19,7 +19,6 @@ import GameHeader from '../components/game/GameHeader'
 import OpponentsGrid from '../components/game/OpponentsGrid'
 import BattlefieldSection from '../components/game/BattlefieldSection'
 import PlayerHand from '../components/game/PlayerHand'
-import ActionGrid from '../components/game/ActionGrid'
 import TargetPicker from '../components/game/TargetPicker'
 import LoseInfluenceOverlay from '../components/game/LoseInfluenceOverlay'
 import ExchangeChoiceOverlay from '../components/game/ExchangeChoiceOverlay'
@@ -179,11 +178,9 @@ export default function Game() {
   return (
     <>
       <style>{NOIR_STYLES}</style>
-      <div style={S.root}>
+      <div style={{ ...S.root, height: '100dvh', overflow: 'hidden' }}>
 
         <GameHeader
-          code={code}
-          treasuryCoins={gameState.treasuryCoins}
           showLog={showLog}
           onToggleLog={() => setShowLog(v => !v)}
         />
@@ -193,14 +190,20 @@ export default function Game() {
           <BotEngine gameState={gameState} hostId={roomHostId} myId={myId} commitAction={commitAction} applyActionLocally={applyActionLocally} />
         )}
 
-        <main style={S.main} className="scroll-hide">
-          <OpponentsGrid gameState={gameState} myId={myId} />
+        <main className="gothic-bg" style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          overflow: 'hidden', paddingBottom: 64,
+        }}>
+          {/* Circular board — centered in flex-1 area */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minHeight: 0 }}>
+            <OpponentsGrid gameState={gameState} myId={myId} />
+          </div>
 
+          {/* Reaction panel (challenge / block / pass) */}
           <BattlefieldSection
             gameState={gameState}
             nameMap={nameMap}
             myId={myId}
-            isMyTurn={isMyTurn}
             iCanChallenge={iCanChallenge}
             iCanBlock={iCanBlock}
             blockCharPicker={blockCharPicker}
@@ -211,24 +214,28 @@ export default function Game() {
             onAction={handleAction}
           />
 
-          <PlayerHand gameState={gameState} myId={myId} />
-
-          {isMyTurn && gameState.phase === 'player_turn' && !myPlayer?.isEliminated && (
-            <ActionGrid
-              validActions={validActs}
-              loading={loading}
-              error={error}
-              onClearError={() => setError('')}
-              onAction={action => handleAction(action)}
-              onTargetAction={action => setTargetAction(action)}
-            />
-          )}
+          {/* Player hand + action controls */}
+          <PlayerHand
+            gameState={gameState}
+            myId={myId}
+            validActions={validActs}
+            loading={loading}
+            error={error}
+            onClearError={() => setError('')}
+            onAction={handleAction}
+            onTargetAction={action => setTargetAction(action)}
+          />
         </main>
 
         <GameNav
           showLog={showLog}
+          isMyTurn={isMyTurn}
+          validActions={validActs}
+          loading={loading}
           onNavigateHome={() => navigate('/')}
           onToggleLog={() => setShowLog(v => !v)}
+          onAction={handleAction}
+          onTargetAction={action => setTargetAction(action)}
         />
 
         {targetAction && (

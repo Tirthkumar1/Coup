@@ -1,6 +1,8 @@
 /* ─── Shared Noir styles for Game page ──────────────────────────────────── */
 export const NOIR_STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;font-style:normal;font-size:24px;line-height:1;display:inline-block;white-space:nowrap;direction:ltr;user-select:none}
 *{box-sizing:border-box}
 body{margin:0;background:#131313}
 .chamfer-sm{clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
@@ -30,6 +32,8 @@ body{margin:0;background:#131313}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+.gothic-bg{background:#131313;background-image:radial-gradient(circle at center,#2a0000 0%,#131313 100%)}
 .fade-in{animation:fadeIn .3s ease forwards}
 .glass{backdrop-filter:blur(12px);background:rgba(32,31,31,.9)}
 .opp-card{background:#1c1b1b;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);padding:12px;position:relative;overflow:hidden;transition:opacity .3s}
