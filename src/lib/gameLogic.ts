@@ -90,14 +90,14 @@ export interface GameState {
   phase: GamePhase
   currentTurnUserId: string
   pendingAction: PendingAction | null
-  challengeDeadline: string | null
+  /** Always null — time-based deadlines have been removed. Kept for schema compat. */
+  challengeDeadline: null
   treasuryCoins: number
   winnerId: string | null
   losingInfluenceUserId: string | null
   /**
    * IDs of players who have explicitly passed in the current response window.
-   * The window closes when every eligible player is in this list (or the
-   * challenge deadline has passed).
+   * The window closes when every eligible player is in this list.
    */
   passedPlayerIds: string[]
 }
@@ -109,8 +109,6 @@ export interface GameState {
 import { ACTION_CHARACTERS, BLOCK_CHARACTERS, ALL_CHARACTERS } from './characters'
 
 const CHARACTERS: Character[] = ALL_CHARACTERS.map(c => c.name)
-
-const CHALLENGE_WINDOW_MS = 7_000
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INTERNAL UTILITIES
@@ -157,9 +155,6 @@ function nextTurnUserId(state: GameState, afterUserId: string): string {
   return active[(idx + 1) % active.length].userId
 }
 
-function challengeDeadlineNow(): string {
-  return new Date(Date.now() + CHALLENGE_WINDOW_MS).toISOString()
-}
 
 function revealCard(state: GameState, userId: string, cardIndex: number): GameState {
   let s = deepClone(state)
@@ -221,20 +216,15 @@ function eligibleResponders(state: GameState): string[] {
 }
 
 /**
- * Checks whether all eligible players have passed in the current window
- * OR the challenge deadline has expired.
+ * Checks whether all eligible players have passed in the current window.
  */
 function windowShouldClose(state: GameState): boolean {
   const eligible = eligibleResponders(state)
-  const allPassed = eligible.every(id => state.passedPlayerIds.includes(id))
-  const deadlinePassed =
-    !!state.challengeDeadline && new Date() > new Date(state.challengeDeadline)
-  return allPassed || deadlinePassed
+  return eligible.every(id => state.passedPlayerIds.includes(id))
 }
 
 /**
  * Advance to the next phase once the current response window has closed.
- * Resets passedPlayerIds and challengeDeadline.
  */
 function advanceWindow(state: GameState): GameState {
   let s = deepClone(state)
@@ -246,7 +236,6 @@ function advanceWindow(state: GameState): GameState {
       const blockable = BLOCK_CHARACTERS[s.pendingAction!.action]
       if (blockable && blockable.length > 0) {
         s.phase = 'block_window'
-        s.challengeDeadline = challengeDeadlineNow()
         return s
       }
       return _resolveAction(s)
@@ -259,7 +248,6 @@ function advanceWindow(state: GameState): GameState {
     case 'reversal_window':
       // Actor did not concede → open block challenge window.
       s.phase = 'block_challenge_window'
-      s.challengeDeadline = challengeDeadlineNow()
       return s
 
     case 'block_challenge_window':
@@ -351,7 +339,6 @@ export function applyAction(
         throw new Error('Not your turn')
       s.pendingAction = { actorId: userId, action }
       s.phase = 'block_window'
-      s.challengeDeadline = challengeDeadlineNow()
       s.passedPlayerIds = []
       return s
     }
@@ -378,7 +365,6 @@ export function applyAction(
         throw new Error('Not your turn')
       s.pendingAction = { actorId: userId, action: 'tax' }
       s.phase = 'challenge_window'
-      s.challengeDeadline = challengeDeadlineNow()
       s.passedPlayerIds = []
       return s
     }
@@ -395,7 +381,6 @@ export function applyAction(
       s.treasuryCoins += 3
       s.pendingAction = { actorId: userId, action: 'assassinate', targetId }
       s.phase = 'challenge_window'
-      s.challengeDeadline = challengeDeadlineNow()
       s.passedPlayerIds = []
       return s
     }
@@ -407,7 +392,6 @@ export function applyAction(
       if (!targetId) throw new Error('steal requires targetId')
       s.pendingAction = { actorId: userId, action: 'steal', targetId }
       s.phase = 'challenge_window'
-      s.challengeDeadline = challengeDeadlineNow()
       s.passedPlayerIds = []
       return s
     }
@@ -418,7 +402,6 @@ export function applyAction(
         throw new Error('Not your turn')
       s.pendingAction = { actorId: userId, action: 'exchange' }
       s.phase = 'challenge_window'
-      s.challengeDeadline = challengeDeadlineNow()
       s.passedPlayerIds = []
       return s
     }
@@ -440,7 +423,6 @@ export function applyAction(
       s.pendingAction = { ...pending, blockerId: userId, blockerCharacter: character }
       // Spec: AFTER_BLOCK_BEFORE_BLOCK_CHALLENGE → reversal_window for actor.
       s.phase = 'reversal_window'
-      s.challengeDeadline = challengeDeadlineNow()
       s.passedPlayerIds = []
       return s
     }
@@ -495,7 +477,6 @@ export function canChallenge(state: GameState, userId: string): boolean {
   // In challenge_window, cannot challenge your own action.
   if (state.phase === 'challenge_window' && state.pendingAction?.actorId === userId) return false
   if (state.passedPlayerIds.includes(userId)) return false
-  if (state.challengeDeadline && new Date() > new Date(state.challengeDeadline)) return false
   return true
 }
 
@@ -513,7 +494,6 @@ export function canBlock(state: GameState, userId: string): boolean {
     pending.targetId !== userId
   ) return false
   if (state.passedPlayerIds.includes(userId)) return false
-  if (state.challengeDeadline && new Date() > new Date(state.challengeDeadline)) return false
   return true
 }
 
@@ -526,7 +506,6 @@ export function canPassIn(state: GameState, userId: string): boolean {
   const eligible = eligibleResponders(state)
   if (!eligible.includes(userId)) return false
   if (state.passedPlayerIds.includes(userId)) return false
-  if (state.challengeDeadline && new Date() > new Date(state.challengeDeadline)) return false
   return true
 }
 
