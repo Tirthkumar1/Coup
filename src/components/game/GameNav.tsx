@@ -5,7 +5,6 @@ interface GameNavProps {
   isMyTurn: boolean
   validActions: ActionType[]
   loading: boolean
-  onNavigateHome: () => void
   onToggleLog: () => void
   onAction: (action: ActionType) => void
   onTargetAction: (action: ActionType) => void
@@ -13,7 +12,7 @@ interface GameNavProps {
 
 export default function GameNav({
   showLog, isMyTurn, validActions, loading,
-  onNavigateHome, onToggleLog, onAction, onTargetAction,
+  onToggleLog, onAction, onTargetAction,
 }: GameNavProps) {
   const canDo = (action: ActionType) => isMyTurn && validActions.includes(action) && !loading
 

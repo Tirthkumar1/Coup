@@ -169,7 +169,6 @@ export default function Game() {
   const nameMap = Object.fromEntries(gameState.players.map(p => [p.userId, p.displayName]))
   const isMyTurn = gameState.currentTurnUserId === myId
   const validActs = getValidActions(gameState, myId)
-  const myPlayer = gameState.players.find(p => p.userId === myId)
   const iCanChallenge = canChallenge(gameState, myId)
   const iCanBlock = canBlock(gameState, myId)
   const showLose = gameState.phase === 'lose_influence' && gameState.losingInfluenceUserId === myId
@@ -232,7 +231,6 @@ export default function Game() {
           isMyTurn={isMyTurn}
           validActions={validActs}
           loading={loading}
-          onNavigateHome={() => navigate('/')}
           onToggleLog={() => setShowLog(v => !v)}
           onAction={handleAction}
           onTargetAction={action => setTargetAction(action)}
