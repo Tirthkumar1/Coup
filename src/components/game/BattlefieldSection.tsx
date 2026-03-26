@@ -1,4 +1,5 @@
 import type { GameState, ActionType, Character } from '../../lib/gameLogic'
+import { canReversal, canPassIn } from '../../lib/gameLogic'
 import { S, BLOCK_OPTIONS } from './GameStyles'
 
 interface BattlefieldSectionProps {
@@ -21,9 +22,19 @@ export default function BattlefieldSection({
   loading, error, onClearError, onAction,
 }: BattlefieldSectionProps) {
   const pending = gameState.pendingAction
+  const phase = gameState.phase
   const isActor = pending?.actorId === myId
-  const showReact = ['challenge_window', 'block_window', 'block_challenge_window'].includes(gameState.phase)
+
+  const REACTION_PHASES = [
+    'challenge_window', 'block_window',
+    'reversal_window', 'block_challenge_window',
+  ]
+  if (!REACTION_PHASES.includes(phase)) return null
+
   const blockOpts = (pending ? (BLOCK_OPTIONS[pending.action] ?? []) : []) as Character[]
+
+  const iCanReversal = canReversal(gameState, myId)
+  const iCanPass = canPassIn(gameState, myId)
 
   const pendingLabel = pending?.blockerId
     ? `${nameMap[pending.blockerId]?.toUpperCase() ?? '?'} BLOCKS AS ${pending.blockerCharacter?.toUpperCase()}`
@@ -36,7 +47,40 @@ export default function BattlefieldSection({
         : (pending?.action ?? '').toUpperCase()
       }`
 
-  if (!showReact) return null
+  // In reversal_window, show a simplified actor-only UI
+  if (phase === 'reversal_window') {
+    return (
+      <div className="fade-in" style={{
+        background: 'rgba(246,190,59,.04)',
+        borderTop: '1px solid rgba(246,190,59,.25)',
+        borderBottom: '1px solid rgba(246,190,59,.25)',
+        padding: '16px 16px', textAlign: 'center', flexShrink: 0,
+      }}>
+        <div style={{ marginBottom: 10 }}>
+          <h2 style={{ ...S.serif, fontSize: 16, color: '#e5e2e1', margin: '0 0 3px' }}>
+            {nameMap[pending?.blockerId ?? '']?.toUpperCase() ?? '?'} BLOCKS AS {pending?.blockerCharacter?.toUpperCase()}
+          </h2>
+          <p style={{ fontSize: 9, color: '#f6be3b', letterSpacing: '0.2em', textTransform: 'uppercase', margin: 0, ...S.mono }}>
+            {isActor ? 'ACCEPT BLOCK OR ALLOW CHALLENGE' : 'WAITING FOR ACTOR…'}
+          </p>
+        </div>
+        {isActor && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+            {iCanReversal && (
+              <button className="react-btn pass" onClick={() => onAction('reversal')} disabled={loading}>
+                ACCEPT BLOCK
+              </button>
+            )}
+            {iCanPass && (
+              <button className="react-btn challenge" onClick={() => onAction('pass')} disabled={loading}>
+                ALLOW CHALLENGE
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="fade-in" style={{
@@ -61,7 +105,9 @@ export default function BattlefieldSection({
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {iCanChallenge && <button className="react-btn challenge" onClick={() => onAction('challenge')} disabled={loading}>CHALLENGE</button>}
+          {iCanChallenge && (
+            <button className="react-btn challenge" onClick={() => onAction('challenge')} disabled={loading}>CHALLENGE</button>
+          )}
           {iCanBlock && !blockCharPicker && (
             <button className="react-btn block" onClick={() => blockOpts.length === 1 ? onAction('block', undefined, blockOpts[0]) : setBlockCharPicker(true)} disabled={loading}>BLOCK</button>
           )}
@@ -70,7 +116,9 @@ export default function BattlefieldSection({
               BLOCK AS {ch.toUpperCase()}
             </button>
           ))}
-          {!isActor && <button className="react-btn pass" onClick={() => onAction('pass')} disabled={loading}>PASS</button>}
+          {iCanPass && !isActor && (
+            <button className="react-btn pass" onClick={() => onAction('pass')} disabled={loading}>PASS</button>
+          )}
         </div>
       </div>
     </div>

@@ -12,38 +12,40 @@ interface BotEngineProps {
     actorId: string,
     targetId: string | undefined,
     character?: any
-  ) => void;
+  ) => void
   applyActionLocally: (
     action: any,
     actorId: string,
     targetId?: string,
     character?: any
-  ) => void;
+  ) => void
 }
 
 /**
- * Headless component that watches gameState.
- * ONLY the host runs this engine to avoid duplicate actions.
+ * Headless component — only the host runs bot logic to avoid duplicate actions.
+ *
+ * Multi-pass robustness: bots that do not wish to challenge/block must
+ * explicitly call pass() so passedPlayerIds is updated and the window
+ * can close once all eligible players have responded.
  */
 export default function BotEngine({ gameState, hostId, myId, applyActionLocally }: BotEngineProps) {
-  
+
   useEffect(() => {
     if (!gameState) return
-    if (hostId !== myId) return // Only host runs bot logic
+    if (hostId !== myId) return
     if (gameState.phase === 'game_over' || gameState.phase === 'waiting') return
 
     const pending = gameState.pendingAction
-    const currentPhase = gameState.phase
+    const phase = gameState.phase
 
-    // Get all alive bots (IDs starting with 'bot_')
     const activeBots = gameState.players.filter(p => !p.isEliminated && p.userId.startsWith('bot_'))
     if (activeBots.length === 0) return
 
     let timeoutId: ReturnType<typeof setTimeout>
-    const delay = () => 1500 + Math.random() * 1500 // 1.5s to 3s delay
+    const delay = () => 1200 + Math.random() * 1200 // 1.2 – 2.4 s
 
-    // Case 1: Active turn
-    if (currentPhase === 'player_turn') {
+    // ── ACTIVE TURN ─────────────────────────────────────────────────────────
+    if (phase === 'player_turn') {
       const activeBot = activeBots.find(b => b.userId === gameState.currentTurnUserId)
       if (activeBot) {
         timeoutId = setTimeout(() => {
@@ -51,47 +53,61 @@ export default function BotEngine({ gameState, hostId, myId, applyActionLocally 
           applyActionLocally(action, activeBot.userId, targetId, undefined)
         }, delay())
       }
-    }
 
-    // Case 2: Lose influence
-    else if (currentPhase === 'lose_influence') {
+    // ── LOSE INFLUENCE ───────────────────────────────────────────────────────
+    } else if (phase === 'lose_influence') {
       const losingBot = activeBots.find(b => b.userId === gameState.losingInfluenceUserId)
       if (losingBot) {
         timeoutId = setTimeout(() => {
           const cardIdx = getBotLoseInfluence(gameState, losingBot.userId)
-          applyActionLocally('lose_influence', losingBot.userId, cardIdx.toString()) // Game.tsx parses this incorrectly currently, need to fix Game.tsx lose_influence handling for remote execution if we do it via applyAction. Or we can just call loseInfluence() directly via a separate callback.
+          applyActionLocally('lose_influence', losingBot.userId, cardIdx.toString())
         }, delay())
       }
-    }
 
-    // Case 3: Block / Challenge window
-    else if (['challenge_window', 'block_window', 'block_challenge_window'].includes(currentPhase)) {
-      // Find a bot that wants to act. We evaluate all bots and see if any want to jump in.
-      // If multiple want to, the first one iterated does it.
-      
+    // ── CHALLENGE / BLOCK / BLOCK-CHALLENGE WINDOWS ─────────────────────────
+    } else if (['challenge_window', 'block_window', 'block_challenge_window'].includes(phase)) {
+      // Evaluate every bot that hasn't already passed.
+      // First bot that wants to act does so; all others explicitly pass.
+      let actionTaken = false
+
       for (const bot of activeBots) {
+        // Skip if this bot is the actor or blocker (they don't respond to their own action/block).
         if (bot.userId === pending?.actorId || bot.userId === pending?.blockerId) continue
+        // Skip if already passed.
+        if (gameState.passedPlayerIds.includes(bot.userId)) continue
 
-        // Check blocks
-        if (['block_window'].includes(currentPhase)) {
-           const blockChar = getBotBlock(gameState, bot.userId)
-           if (blockChar) {
-             timeoutId = setTimeout(() => applyActionLocally('block', bot.userId, undefined, blockChar), delay())
-             break
-           }
+        if (phase === 'block_window' && !actionTaken) {
+          const blockChar = getBotBlock(gameState, bot.userId)
+          if (blockChar) {
+            timeoutId = setTimeout(() => applyActionLocally('block', bot.userId, undefined, blockChar), delay())
+            actionTaken = true
+            continue
+          }
         }
 
-        // Check challenges
-        if (['challenge_window', 'block_challenge_window'].includes(currentPhase)) {
-           const challenges = getBotChallenge(gameState, bot.userId)
-           if (challenges) {
-             timeoutId = setTimeout(() => applyActionLocally('challenge', bot.userId, undefined, undefined), delay())
-             break
-           }
+        if ((phase === 'challenge_window' || phase === 'block_challenge_window') && !actionTaken) {
+          if (getBotChallenge(gameState, bot.userId)) {
+            timeoutId = setTimeout(() => applyActionLocally('challenge', bot.userId), delay())
+            actionTaken = true
+            continue
+          }
         }
+
+        // Bot has no reaction — explicitly pass so passedPlayerIds is updated.
+        const botId = bot.userId
+        setTimeout(() => applyActionLocally('pass', botId), delay())
       }
-      
-      // If no bot reacted, we do nothing and let the timer run out (which Game.tsx handles).
+
+    // ── REVERSAL WINDOW ──────────────────────────────────────────────────────
+    } else if (phase === 'reversal_window') {
+      // If the actor is a bot, decide: concede (reversal) or allow challenge (pass).
+      const actorBot = activeBots.find(b => b.userId === pending?.actorId)
+      if (actorBot && !gameState.passedPlayerIds.includes(actorBot.userId)) {
+        timeoutId = setTimeout(() => {
+          // Bots always allow the challenge window (pass through reversal).
+          applyActionLocally('pass', actorBot.userId)
+        }, delay())
+      }
     }
 
     return () => clearTimeout(timeoutId)
