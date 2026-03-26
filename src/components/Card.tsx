@@ -71,9 +71,12 @@ export default function Card({
           <div className="absolute bottom-0 left-0 right-0 text-center text-[10px] font-bold text-white py-1 tracking-wide uppercase">
             {card.character}
           </div>
-          {eliminated && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-              <span className="text-red-400 text-xs font-bold tracking-wider rotate-[-20deg]">DEAD</span>
+          {card.revealed && (
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)' }}>
+              <svg viewBox="0 0 40 40" style={{ width: '55%', height: '55%', opacity: 0.92 }}>
+                <line x1="4" y1="4" x2="36" y2="36" stroke="#c80815" strokeWidth="5" strokeLinecap="round" />
+                <line x1="36" y1="4" x2="4" y2="36" stroke="#c80815" strokeWidth="5" strokeLinecap="round" />
+              </svg>
             </div>
           )}
         </>
