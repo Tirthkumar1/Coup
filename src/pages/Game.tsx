@@ -137,7 +137,7 @@ export default function Game() {
     applyActionLocally(action, myId, targetId, character), [applyActionLocally, myId])
   const handleLose = useCallback((i: number) => applyActionLocally('lose_influence', myId, i.toString()), [applyActionLocally, myId])
 
-  const handleExchangeChoice = useCallback(async (keepIndices: [number, number]) => {
+  const handleExchangeChoice = useCallback(async (keepIndices: number[]) => {
     if (loading) return
     setLoading(true); setError('')
     try {

@@ -6,7 +6,7 @@ import { S } from './GameStyles'
 interface ExchangeChoiceOverlayProps {
   gameState: GameState
   myId: string
-  onChoose: (keepIndices: [number, number]) => void
+  onChoose: (keepIndices: number[]) => void
 }
 
 export default function ExchangeChoiceOverlay({ gameState, myId, onChoose }: ExchangeChoiceOverlayProps) {
@@ -15,13 +15,15 @@ export default function ExchangeChoiceOverlay({ gameState, myId, onChoose }: Exc
 
   if (!myPlayer) return null
 
+  const mustKeep = gameState.pendingAction?.exchangeKeepCount ?? 2
+
   const toggle = (i: number) => {
     setSelected(prev =>
-      prev.includes(i) ? prev.filter(x => x !== i) : prev.length < 2 ? [...prev, i] : prev
+      prev.includes(i) ? prev.filter(x => x !== i) : prev.length < mustKeep ? [...prev, i] : prev
     )
   }
 
-  const canConfirm = selected.length === 2
+  const canConfirm = selected.length === mustKeep
 
   return (
     <div style={S.overlay}>
@@ -29,7 +31,7 @@ export default function ExchangeChoiceOverlay({ gameState, myId, onChoose }: Exc
         <div style={{ fontSize: 9, ...S.mono, color: '#f6be3b', letterSpacing: '0.25em', marginBottom: 4 }}>AMBASSADOR EXCHANGE</div>
         <h3 style={{ ...S.serif, fontSize: 22, color: '#e5e2e1', margin: '0 0 4px' }}>Choose 2 to Keep</h3>
         <p style={{ fontSize: 9, color: '#5d3f3c', letterSpacing: '0.15em', margin: '0 0 20px', ...S.mono }}>
-          SELECT 2 IDENTITIES — THE REST RETURN TO DECK
+          SELECT {mustKeep} {mustKeep === 1 ? 'IDENTITY' : 'IDENTITIES'} — THE REST RETURN TO DECK
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
           {myPlayer.cards.map((card, i) => {
@@ -59,9 +61,9 @@ export default function ExchangeChoiceOverlay({ gameState, myId, onChoose }: Exc
           className="react-btn"
           style={{ opacity: canConfirm ? 1 : 0.4, cursor: canConfirm ? 'pointer' : 'not-allowed', background: 'rgba(246,190,59,.15)', borderColor: 'rgba(246,190,59,.5)', color: '#f6be3b' }}
           disabled={!canConfirm}
-          onClick={() => canConfirm && onChoose(selected as [number, number])}
+          onClick={() => canConfirm && onChoose(selected)}
         >
-          CONFIRM SELECTION ({selected.length}/2)
+          CONFIRM SELECTION ({selected.length}/{mustKeep})
         </button>
       </div>
     </div>

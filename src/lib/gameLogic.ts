@@ -77,6 +77,8 @@ export interface PendingAction {
    * revealing a card). Prevents the lose_influence handler from re-resolving.
    */
   actionFullyResolved?: boolean
+  /** How many unrevealed cards the actor must keep during an exchange. */
+  exchangeKeepCount?: number
 }
 
 export interface GameState {
@@ -695,10 +697,11 @@ function _resolveAction(state: GameState): GameState {
     case 'exchange': {
       // Draw up to 2 cards; player must choose which to keep in exchange_choice.
       const actor = getPlayer(s, actorId)
+      const unrevealedBefore = actor.cards.filter(c => !c.revealed).length
       const drawn = s.deck.splice(0, Math.min(2, s.deck.length))
       actor.cards.push(...drawn)
       s.phase = 'exchange_choice'
-      s.pendingAction = { ...pending, actionFullyResolved: true }
+      s.pendingAction = { ...pending, actionFullyResolved: true, exchangeKeepCount: unrevealedBefore }
       s.challengeDeadline = null
       return s
     }
@@ -721,7 +724,7 @@ function _resolveAction(state: GameState): GameState {
 export function chooseExchangeCards(
   state: GameState,
   userId: string,
-  keepIndices: [number, number],
+  keepIndices: number[],
 ): GameState {
   if (state.phase !== 'exchange_choice')
     throw new Error('Not in exchange_choice phase')
@@ -732,8 +735,8 @@ export function chooseExchangeCards(
   let s = deepClone(state)
   const actor = getPlayer(s, userId)
 
-  // They must keep exactly 2 cards total (matching their original hand size).
-  const mustKeep = 2
+  // Keep as many unrevealed cards as the player had before drawing.
+  const mustKeep = pending.exchangeKeepCount ?? 2
   if (keepIndices.length !== mustKeep)
     throw new Error(`Must keep exactly ${mustKeep} cards`)
 
