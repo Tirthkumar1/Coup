@@ -15,9 +15,6 @@ export default function ExchangeChoiceOverlay({ gameState, myId, onChoose }: Exc
 
   if (!myPlayer) return null
 
-  // Only unrevealed cards are selectable (revealed ones are already gone).
-  const unrevealedIndices = myPlayer.cards.map((c, i) => (!c.revealed ? i : -1)).filter(i => i !== -1)
-
   const toggle = (i: number) => {
     setSelected(prev =>
       prev.includes(i) ? prev.filter(x => x !== i) : prev.length < 2 ? [...prev, i] : prev
