@@ -106,24 +106,11 @@ export interface GameState {
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CHARACTERS: Character[] = [
-  'Duke', 'Assassin', 'Captain', 'Ambassador', 'Contessa',
-]
+import { ACTION_CHARACTERS, BLOCK_CHARACTERS, ALL_CHARACTERS } from './characters'
+
+const CHARACTERS: Character[] = ALL_CHARACTERS.map(c => c.name)
 
 const CHALLENGE_WINDOW_MS = 7_000
-
-const ACTION_CHARACTERS: Partial<Record<ActionType, Character>> = {
-  tax: 'Duke',
-  assassinate: 'Assassin',
-  steal: 'Captain',
-  exchange: 'Ambassador',
-}
-
-const BLOCK_CHARACTERS: Partial<Record<ActionType, Character[]>> = {
-  foreign_aid: ['Duke'],
-  assassinate: ['Contessa'],
-  steal: ['Captain', 'Ambassador'],
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INTERNAL UTILITIES
