@@ -12,11 +12,11 @@ interface CardProps {
 
 // FIX: folder is "charactors" (typo in your project), not "characters"
 const CHARACTER_IMAGES: Record<string, string> = {
-  Duke: '/assets/charactors/duke.png',
-  Assassin: '/assets/charactors/assassin.png',
-  Captain: '/assets/charactors/captain.png',
-  Ambassador: '/assets/charactors/ambassador.png',
-  Contessa: '/assets/charactors/contessa.png',
+  Duke: '/charactors/Duke.png',
+  Assassin: '/charactors/Assassin.png',
+  Captain: '/charactors/captain.png',
+  Ambassador: '/charactors/Ambassador.png',
+  Contessa: '/charactors/Contessa.png',
 }
 
 const CHARACTER_GRADIENTS: Record<string, string> = {
@@ -80,7 +80,7 @@ export default function Card({
       ) : (
         <div className="w-full h-full bg-gradient-to-b from-indigo-800 to-indigo-950 flex items-center justify-center relative">
           <img
-            src="/assets/charactors/card-back.png"
+            src="/charactors/card-back.png"
             alt="Card back"
             className="absolute inset-0 w-full h-full object-cover"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
