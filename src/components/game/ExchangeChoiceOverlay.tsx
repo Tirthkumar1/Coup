@@ -43,10 +43,8 @@ export default function ExchangeChoiceOverlay({ gameState, myId, onChoose }: Exc
                     width: 96, height: 144,
                     border: isSelected ? '2px solid #f6be3b' : '1px solid rgba(200,8,21,.4)',
                     boxShadow: isSelected ? '0 0 12px rgba(246,190,59,.4)' : undefined,
-                    cursor: 'pointer',
                     opacity: !isSelected && selected.length === 2 ? 0.4 : 1,
                   }}
-                  onClick={() => toggle(i)}
                 >
                   <CardComponent card={card} size="md" alwaysShow selectable onClick={() => toggle(i)} />
                 </div>
