@@ -732,8 +732,6 @@ export function chooseExchangeCards(
   let s = deepClone(state)
   const actor = getPlayer(s, userId)
 
-  // Count how many unrevealed cards the player should keep (same as before exchange).
-  const unrevealedBefore = actor.cards.filter((c) => !c.revealed).length - 0
   // They must keep exactly 2 cards total (matching their original hand size).
   const mustKeep = 2
   if (keepIndices.length !== mustKeep)
