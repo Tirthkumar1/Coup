@@ -10,6 +10,7 @@ import {
   canChallenge,
   canBlock,
   loseInfluence,
+  chooseExchangeCards,
 } from '../lib/gameLogic'
 import BotEngine from '../components/BotEngine'
 import { type ActionLogEntry } from '../components/ActionLog'
@@ -21,6 +22,7 @@ import PlayerHand from '../components/game/PlayerHand'
 import ActionGrid from '../components/game/ActionGrid'
 import TargetPicker from '../components/game/TargetPicker'
 import LoseInfluenceOverlay from '../components/game/LoseInfluenceOverlay'
+import ExchangeChoiceOverlay from '../components/game/ExchangeChoiceOverlay'
 import IntelDrawer from '../components/game/IntelDrawer'
 import GameNav from '../components/game/GameNav'
 
@@ -134,6 +136,22 @@ export default function Game() {
   const handleAction = useCallback((action: ActionType, targetId?: string, character?: Character) =>
     applyActionLocally(action, myId, targetId, character), [applyActionLocally, myId])
   const handleLose = useCallback((i: number) => applyActionLocally('lose_influence', myId, i.toString()), [applyActionLocally, myId])
+
+  const handleExchangeChoice = useCallback(async (keepIndices: [number, number]) => {
+    if (loading) return
+    setLoading(true); setError('')
+    try {
+      const fresh = await fetchFresh()
+      if (!fresh) throw new Error('Could not fetch game state')
+      const next = chooseExchangeCards(fresh.state, myId, keepIndices)
+      setGameState(next); gameStateRef.current = next
+      await commitState(next, 'exchange' as ActionType, myId, undefined, fresh.rowId)
+    } catch (e: unknown) {
+      setError((e as Error).message)
+      const fresh = await fetchFresh()
+      if (fresh) { setGameState(fresh.state); gameStateRef.current = fresh.state }
+    } finally { setLoading(false) }
+  }, [loading, myId, fetchFresh, commitState])
   const commitAction = useCallback(async (_s: GameState, action: ActionType, actorId: string, targetId: string | undefined) =>
     applyActionLocally(action, actorId, targetId), [applyActionLocally])
 
@@ -156,6 +174,7 @@ export default function Game() {
   const iCanChallenge = canChallenge(gameState, myId)
   const iCanBlock = canBlock(gameState, myId)
   const showLose = gameState.phase === 'lose_influence' && gameState.losingInfluenceUserId === myId
+  const showExchange = gameState.phase === 'exchange_choice' && gameState.pendingAction?.actorId === myId
 
   return (
     <>
@@ -180,6 +199,7 @@ export default function Game() {
           <BattlefieldSection
             gameState={gameState}
             nameMap={nameMap}
+            myId={myId}
             isMyTurn={isMyTurn}
             iCanChallenge={iCanChallenge}
             iCanBlock={iCanBlock}
@@ -226,6 +246,14 @@ export default function Game() {
             gameState={gameState}
             myId={myId}
             onLose={handleLose}
+          />
+        )}
+
+        {showExchange && (
+          <ExchangeChoiceOverlay
+            gameState={gameState}
+            myId={myId}
+            onChoose={handleExchangeChoice}
           />
         )}
 

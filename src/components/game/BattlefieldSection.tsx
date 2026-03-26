@@ -4,6 +4,7 @@ import { S, BLOCK_OPTIONS } from './GameStyles'
 interface BattlefieldSectionProps {
   gameState: GameState
   nameMap: Record<string, string>
+  myId: string
   isMyTurn: boolean
   iCanChallenge: boolean
   iCanBlock: boolean
@@ -16,11 +17,12 @@ interface BattlefieldSectionProps {
 }
 
 export default function BattlefieldSection({
-  gameState, nameMap, isMyTurn,
+  gameState, nameMap, myId, isMyTurn,
   iCanChallenge, iCanBlock, blockCharPicker, setBlockCharPicker,
   loading, error, onClearError, onAction,
 }: BattlefieldSectionProps) {
   const pending = gameState.pendingAction
+  const isActor = pending?.actorId === myId
   const showReact = ['challenge_window', 'block_window', 'block_challenge_window'].includes(gameState.phase)
   const blockOpts = (pending ? (BLOCK_OPTIONS[pending.action] ?? []) : []) as Character[]
 
@@ -62,7 +64,7 @@ export default function BattlefieldSection({
                 BLOCK AS {ch.toUpperCase()}
               </button>
             ))}
-            <button className="react-btn pass" onClick={() => onAction('pass')} disabled={loading}>PASS</button>
+            {!isActor && <button className="react-btn pass" onClick={() => onAction('pass')} disabled={loading}>PASS</button>}
           </div>
         </div>
       </div>
