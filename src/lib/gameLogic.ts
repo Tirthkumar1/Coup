@@ -466,9 +466,11 @@ export function canChallenge(state: GameState, userId: string): boolean {
     return false
   const player = getPlayer(state, userId)
   if (player.isEliminated) return false
-  // Cannot challenge your own action or your own block.
-  if (state.pendingAction?.actorId === userId) return false
+  // Cannot challenge your own block.
   if (state.pendingAction?.blockerId === userId) return false
+  // During challenge_window, cannot challenge your own action.
+  // During block_challenge_window, the actor CAN challenge (they're being blocked).
+  if (state.phase === 'challenge_window' && state.pendingAction?.actorId === userId) return false
   // Deadline must not have passed.
   if (state.challengeDeadline && new Date() > new Date(state.challengeDeadline))
     return false
