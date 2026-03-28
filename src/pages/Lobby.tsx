@@ -68,12 +68,14 @@ export default function Lobby() {
     try {
       localStorage.setItem('coup_display_name', displayName.trim())
       
-      // Ensure we have a stable identity — anonymous Supabase session persists across refreshes.
+      // Determine effective user ID (auth id or guest id)
       let effectiveId = user?.id
       if (!effectiveId) {
-        const { data: anonData, error: ae } = await supabase.auth.signInAnonymously()
-        if (ae) throw ae
-        effectiveId = anonData.user!.id
+        effectiveId = localStorage.getItem('coup_guest_id') ?? undefined
+        if (!effectiveId) {
+          effectiveId = `guest_${Math.random().toString(36).substring(2, 9)}`
+          localStorage.setItem('coup_guest_id', effectiveId)
+        }
       }
 
       const { data: room, error: re } = await supabase
@@ -100,7 +102,7 @@ export default function Lobby() {
         <div className="mb-6 text-center">
           <h1 className="text-5xl font-black text-white tracking-tight mb-1">COUP</h1>
           <p className="text-gray-500 text-xs">
-            {user && !user.is_anonymous ? user.email : 'Playing as Guest'}
+            {user ? user.email : 'Playing as Guest'}
           </p>
         </div>
 
