@@ -30,12 +30,11 @@ export default function Game() {
   const navigate = useNavigate()
 
   /* auth */
-  const [myId, setMyId] = useState<string>(() => localStorage.getItem('coup_guest_id') || '')
+  const [myId, setMyId] = useState<string>('')
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { if (data.session?.user) setMyId(data.session.user.id) })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
       if (s?.user) setMyId(s.user.id)
-      else setMyId(localStorage.getItem('coup_guest_id') || '')
     })
     return () => subscription.unsubscribe()
   }, [])
