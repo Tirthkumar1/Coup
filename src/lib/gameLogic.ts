@@ -282,7 +282,7 @@ export function initGame(
     currentTurnUserId: playerInfos[0].userId,
     pendingAction: null,
     challengeDeadline: null,
-    treasuryCoins: 30 - playerInfos.length * 2,
+    treasuryCoins: 100,
     winnerId: null,
     losingInfluenceUserId: null,
     passedPlayerIds: [],
@@ -628,7 +628,11 @@ function _resolveAction(state: GameState): GameState {
       break
     }
     case 'assassinate': {
-      // Cost already paid. Target loses an influence card.
+      // Cost already paid. If target was already eliminated (e.g. they lost their
+      // last card during the challenge that proved we held the Assassin), just end
+      // the turn — no second influence-loss needed.
+      const assassinTarget = getPlayer(s, targetId!)
+      if (assassinTarget.isEliminated) break
       s.losingInfluenceUserId = targetId!
       s.phase = 'lose_influence'
       s.pendingAction = { ...pending, postLoseEffect: 'advance_turn' }
